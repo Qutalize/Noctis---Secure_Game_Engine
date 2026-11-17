@@ -26,8 +26,8 @@ constexpr float kSpeed = 2.5f;
 constexpr XMFLOAT3 kHalfBody{.25f, .80f, .25f};
 
 struct Walk {
-    XMFLOAT3 center{-.57f, .85f, -7.2f};
-    float yaw = -.15f;
+    XMFLOAT3 center{-.14f, .85f, -7.2f};
+    float yaw = 0.f;
     float pitch = .045f;
 
     void Move(float strafe, float forward, float seconds) {

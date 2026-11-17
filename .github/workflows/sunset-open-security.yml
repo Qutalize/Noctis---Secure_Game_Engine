@@ -2,27 +2,9 @@ name: Sunset Harbor and open security
 
 on:
   push:
-    branches: ['work/**']
-    paths:
-      - '.github/workflows/sunset-open-security.yml'
-      - 'CMakeLists.txt'
-      - 'engine/**'
-      - 'game/**'
-      - 'assets/shaders/**'
-      - 'server_rs/**'
-      - 'tools/card_client_probe/**'
-      - 'tools/sunset/**'
+    branches: [dev, 'work/sunset-open-security']
   pull_request:
     branches: [main]
-    paths:
-      - '.github/workflows/sunset-open-security.yml'
-      - 'CMakeLists.txt'
-      - 'engine/**'
-      - 'game/**'
-      - 'assets/shaders/**'
-      - 'server_rs/**'
-      - 'tools/card_client_probe/**'
-      - 'tools/sunset/**'
   workflow_dispatch:
 
 permissions:
