@@ -28,4 +28,4 @@ python -B tools/card_client_probe/test_open_security.py
 
 ## 実行結果（2026-11-18）
 
-標準Windows Actionsの公開チェックアウト \`a7108089\` でRustサーバーをReleaseビルド。既存のRust単体試験6本と、TLS上で実サーバーに接続した公開プロトコル向け追加試験3本が成功した。対象は今回の脅威モデルに含めた他席情報の非配信、再接続をまたぐ操作再送、認証済みクライアントによる偽の勝敗通知。 [標準Actionsの結果](https://github.com/Qutalize/Noctis---Secure_Game_Engine/actions/runs/44135186661/job/134222658936)
+標準Windows Actionsの公開チェックアウト `a7108089` でRustサーバーをReleaseビルド。既存のRust単体試験6本と、TLS上で実サーバーに接続した公開プロトコル向け追加試験3本が成功した。対象は今回の脅威モデルに含めた他席情報の非配信、再接続をまたぐ操作再送、認証済みクライアントによる偽の勝敗通知。 [標準Actionsの結果](https://github.com/Qutalize/Noctis---Secure_Game_Engine/actions/runs/44135186661/job/134222658936)
