@@ -171,7 +171,11 @@ public:
     ~Renderer();
 
     // basicOnly: 射撃場のLit+Overlayだけを初期化する。
+    // A null window selects deterministic WARP rendering for offline validation.
     bool Initialize(HWND hwnd, int width, int height, bool basicOnly = false);
+
+    // Call after EndFrame on an offscreen renderer. Returns tightly packed RGBA8.
+    std::vector<uint8_t> ReadOffscreenRgba();
 
     // メッシュ生成（頂点 + 32bit インデックス）
     Mesh CreateMesh(const std::vector<Vertex>& vertices,
@@ -361,7 +365,7 @@ public:
     void Shutdown();
 
 private:
-    void CreateDevice();
+    void CreateDevice(bool useWarp);
     void CreateCommandObjects();
     void CreateSwapChain(HWND hwnd);
     void CreateRenderTargets();

@@ -1,6 +1,7 @@
 #include "engine/renderer/Renderer.h"
 #include "engine/core/EngineFeatures.h"
 
+#include <cstring>
 #include <fstream>
 #include <filesystem>
 #include <stdexcept>
@@ -77,10 +78,11 @@ void Renderer::Shutdown() {
 }
 
 bool Renderer::Initialize(HWND hwnd, int width, int height, bool basicOnly) {
+    if (width <= 0 || height <= 0) throw std::invalid_argument("Invalid render dimensions");
     m_width  = width;
     m_height = height;
 
-    CreateDevice();
+    CreateDevice(hwnd == nullptr);
 #if ENGINE_RAY_TRACING
     m_rayScene = std::make_unique<RayTracingScene>(m_device.Get());
 #endif
@@ -101,7 +103,7 @@ bool Renderer::Initialize(HWND hwnd, int width, int height, bool basicOnly) {
         DX_CHECK(HRESULT_FROM_WIN32(GetLastError()));
     }
 
-    CreateSwapChain(hwnd);
+    if (hwnd) CreateSwapChain(hwnd);
     CreateRenderTargets();
     CreateDepthBuffer();
     CreateRootSignature();
@@ -198,7 +200,7 @@ bool Renderer::Initialize(HWND hwnd, int width, int height, bool basicOnly) {
     return true;
 }
 
-void Renderer::CreateDevice() {
+void Renderer::CreateDevice(bool useWarp) {
     UINT factoryFlags = 0;
 
     // Debug ビルドでのみ検証レイヤーを有効化（CLAUDE.md 必須事項）
@@ -214,6 +216,13 @@ void Renderer::CreateDevice() {
 #endif
 
     DX_CHECK(CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(&m_factory)));
+    if (useWarp) {
+        ComPtr<IDXGIAdapter> warp;
+        DX_CHECK(m_factory->EnumWarpAdapter(IID_PPV_ARGS(&warp)));
+        DX_CHECK(D3D12CreateDevice(warp.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_device)));
+        LOG_INFO("D3D12 adapter: WARP (offscreen)");
+        return;
+    }
 
     // ハードウェアアダプタを選んでフィーチャーレベル 12.0 でデバイス作成
     ComPtr<IDXGIAdapter1> adapter;
@@ -286,7 +295,7 @@ void Renderer::CreateRenderTargets() {
     // RTV ヒープ: スワップチェーンのバッファ数ぶん。
     // 根拠 = kFrameCount（バックバッファ 1 つにつき RTV 1 つ）
     D3D12_DESCRIPTOR_HEAP_DESC rtvDesc = {};
-    rtvDesc.NumDescriptors = kFrameCount;
+    rtvDesc.NumDescriptors = m_swapChain ? kFrameCount : 1;
     rtvDesc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     rtvDesc.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     DX_CHECK(m_device->CreateDescriptorHeap(&rtvDesc, IID_PPV_ARGS(&m_rtvHeap)));
@@ -295,8 +304,24 @@ void Renderer::CreateRenderTargets() {
 
     D3D12_CPU_DESCRIPTOR_HANDLE handle =
         m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
-    for (UINT i = 0; i < kFrameCount; ++i) {
-        DX_CHECK(m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_renderTargets[i])));
+    for (UINT i = 0; i < rtvDesc.NumDescriptors; ++i) {
+        if (m_swapChain) {
+            DX_CHECK(m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_renderTargets[i])));
+        } else {
+            D3D12_RESOURCE_DESC target{};
+            target.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+            target.Width = static_cast<UINT>(m_width);
+            target.Height = static_cast<UINT>(m_height);
+            target.DepthOrArraySize = 1;
+            target.MipLevels = 1;
+            target.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            target.SampleDesc.Count = 1;
+            target.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+            const auto heap = HeapProps(D3D12_HEAP_TYPE_DEFAULT);
+            // COMMON and PRESENT are the same state. Both targets use BeginMainPass.
+            DX_CHECK(m_device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &target,
+                D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&m_renderTargets[i])));
+        }
         m_device->CreateRenderTargetView(m_renderTargets[i].Get(), nullptr, handle);
         handle.ptr += m_rtvDescriptorSize;
     }
@@ -2378,8 +2403,57 @@ void Renderer::EndFrame() {
     ID3D12CommandList* lists[] = { m_commandList.Get() };
     m_commandQueue->ExecuteCommandLists(1, lists);
 
-    DX_CHECK(m_swapChain->Present(1, 0)); // VSync あり
-    MoveToNextFrame();
+    if (m_swapChain) {
+        DX_CHECK(m_swapChain->Present(1, 0)); // VSync あり
+        MoveToNextFrame();
+    } else {
+        WaitForGpu();
+    }
+}
+
+std::vector<uint8_t> Renderer::ReadOffscreenRgba() {
+    if (!m_initialized || m_swapChain) throw std::logic_error("Offscreen renderer required");
+    const auto& target = m_renderTargets[m_frameIndex];
+    const auto targetDesc = target->GetDesc();
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
+    UINT64 totalBytes = 0;
+    m_device->GetCopyableFootprints(&targetDesc, 0, 1, 0, &footprint, nullptr, nullptr, &totalBytes);
+
+    const auto heap = HeapProps(D3D12_HEAP_TYPE_READBACK);
+    const auto buffer = BufferDesc(totalBytes);
+    ComPtr<ID3D12Resource> readback;
+    DX_CHECK(m_device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buffer,
+        D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&readback)));
+
+    DX_CHECK(m_commandAllocators[m_frameIndex]->Reset());
+    DX_CHECK(m_commandList->Reset(m_commandAllocators[m_frameIndex].Get(), nullptr));
+    Transition(m_commandList.Get(), target.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    D3D12_TEXTURE_COPY_LOCATION source{};
+    source.pResource = target.Get();
+    source.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    D3D12_TEXTURE_COPY_LOCATION destination{};
+    destination.pResource = readback.Get();
+    destination.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    destination.PlacedFootprint = footprint;
+    m_commandList->CopyTextureRegion(&destination, 0, 0, 0, &source, nullptr);
+    Transition(m_commandList.Get(), target.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COMMON);
+    DX_CHECK(m_commandList->Close());
+    ID3D12CommandList* lists[] = {m_commandList.Get()};
+    m_commandQueue->ExecuteCommandLists(1, lists);
+    WaitForGpu();
+
+    const auto rowBytes = static_cast<std::size_t>(m_width) * 4;
+    std::vector<uint8_t> rgba(rowBytes * m_height);
+    const D3D12_RANGE readRange{0, static_cast<SIZE_T>(totalBytes)};
+    void* mapped = nullptr;
+    DX_CHECK(readback->Map(0, &readRange, &mapped));
+    const auto* rows = static_cast<const uint8_t*>(mapped) + footprint.Offset;
+    for (int y = 0; y < m_height; ++y) {
+        std::memcpy(rgba.data() + y * rowBytes, rows + y * footprint.Footprint.RowPitch, rowBytes);
+    }
+    const D3D12_RANGE noWrites{0, 0};
+    readback->Unmap(0, &noWrites);
+    return rgba;
 }
 
 void Renderer::SetDirectionalLight(const XMFLOAT3& dir, const XMFLOAT3& color,

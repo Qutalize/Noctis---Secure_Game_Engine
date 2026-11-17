@@ -1,0 +1,77 @@
+name: Sunset Harbor and open security
+
+on:
+  push:
+    branches: ['work/**']
+    paths:
+      - '.github/workflows/sunset-open-security.yml'
+      - 'CMakeLists.txt'
+      - 'engine/**'
+      - 'game/**'
+      - 'assets/shaders/**'
+      - 'server_rs/**'
+      - 'tools/card_client_probe/**'
+      - 'tools/sunset/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/sunset-open-security.yml'
+      - 'CMakeLists.txt'
+      - 'engine/**'
+      - 'game/**'
+      - 'assets/shaders/**'
+      - 'server_rs/**'
+      - 'tools/card_client_probe/**'
+      - 'tools/sunset/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sunset:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Configure and build the native demo
+        run: |
+          cmake -S . -B build-ci -G "Visual Studio 17 2022" -A x64 -DGAME_PROFILE=all -DBUILD_SUNSET_WALK=ON
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build-ci --config Release --target sunset_walk --parallel 2
+      - name: Replay walk and capture controlled asset pairs using WARP
+        run: |
+          $exe = "build-ci/Release/SunsetWalk.exe"
+          & $exe --self-test
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $exe --capture sunset-evidence
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B tools/sunset/verify_captures.py sunset-evidence
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sunset-evidence
+          path: |
+            sunset-evidence/*.png
+            sunset-evidence/samples.csv
+            sunset-evidence/results.json
+            build-ci/Release/SunsetWalk.exe
+            build-ci/Release/shaders/*.dxil
+          if-no-files-found: error
+          retention-days: 5
+
+  open-security:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build and test the public server
+        run: |
+          cargo build --manifest-path server_rs/Cargo.toml --release --locked
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --manifest-path server_rs/Cargo.toml --release --locked
+      - name: Exercise the server from a protocol-aware modified client
+        run: python -B tools/card_client_probe/test_open_security.py

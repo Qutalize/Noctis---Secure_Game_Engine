@@ -67,6 +67,11 @@ add_compile_definitions($<$<CONFIG:Debug>:_DEBUG>)
 #   ここでは定義しない＝マクロ再定義警告 C4005 を避ける）
 add_compile_definitions(NOMINMAX UNICODE _UNICODE)
 
+option(BUILD_SUNSET_WALK "Build the interactive Sunset Harbor preview" OFF)
+if(BUILD_SUNSET_WALK AND GAME_PROFILE STREQUAL "range")
+    message(FATAL_ERROR "Sunset Harbor requires the all or fps profile")
+endif()
+
 set(RUNTIME_CONFIG "" CACHE FILEPATH "JSON configuration for a selected creator runtime")
 if(RUNTIME_CONFIG)
     include(cmake/SelectedRuntime.cmake)
@@ -360,7 +365,19 @@ if (DXC_EXE)
             ${SHADER_BIN_DIR}/ShadowSkinnedVS.dxil)
     endif()
     add_dependencies(game shaders)
+    if(BUILD_SUNSET_WALK)
+        add_executable(sunset_walk game/sunset/Main.cpp game/sunset/SunsetScene.cpp)
+        target_link_libraries(sunset_walk PRIVATE engine)
+        set_target_properties(sunset_walk PROPERTIES OUTPUT_NAME SunsetWalk)
+        add_dependencies(sunset_walk shaders)
+        add_custom_command(TARGET sunset_walk POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${SHADER_BIN_DIR}" "$<TARGET_FILE_DIR:sunset_walk>/shaders")
+    endif()
 else()
+    if(BUILD_SUNSET_WALK)
+        message(FATAL_ERROR "Sunset Harbor requires dxc")
+    endif()
     message(WARNING
         "dxc.exe が見つかりません。Windows SDK の bin/x64 を PATH に追加するか、"
         "手動で assets/shaders/*.hlsl を ${SHADER_BIN_DIR} にコンパイルしてください。")
