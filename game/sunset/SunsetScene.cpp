@@ -28,10 +28,9 @@ XMFLOAT4 SkyColor(const XMFLOAT3& direction) {
     const float alignment = std::clamp(direction.x * kSun.x + direction.y * kSun.y +
                                        direction.z * kSun.z, 0.f, 1.f);
     const float glow = std::pow(alignment, 36.f) * .44f;
-    const float disk = std::clamp((alignment - .99956f) / .00026f, 0.f, 1.f);
-    return {Mix(.78f, .16f, upper) + glow + disk,
-            Mix(.42f, .28f, upper) + glow * .48f + disk * .78f,
-            Mix(.33f, .46f, upper) + glow * .10f + disk * .42f, 1.f};
+    return {Mix(.78f, .16f, upper) + glow,
+            Mix(.42f, .28f, upper) + glow * .48f,
+            Mix(.33f, .46f, upper) + glow * .10f, 1.f};
 }
 
 Mesh Sky(Renderer& renderer) {
@@ -54,6 +53,24 @@ Mesh Sky(Renderer& renderer) {
                 indices.insert(indices.end(), {index, next, index + 1, index + 1, next, next + 1});
             }
         }
+    }
+    // Model the sun disk separately from the coarse grid used for the atmospheric glow.
+    constexpr int diskSegments = 32;
+    constexpr float diskRadius = 2.75f;
+    const XMVECTOR center = XMVector3Normalize(XMLoadFloat3(&kSun)) * (radius - 1.f);
+    const XMVECTOR right = XMVector3Normalize(XMVector3Cross(XMVectorSet(0, 1, 0, 0), center));
+    const XMVECTOR up = XMVector3Normalize(XMVector3Cross(center, right));
+    const XMFLOAT4 diskColor{1.45f, 1.13f, .66f, 1.f};
+    XMFLOAT3 position;
+    XMStoreFloat3(&position, center);
+    const auto diskIndex = static_cast<uint32_t>(vertices.size());
+    vertices.push_back({position, kSun, diskColor});
+    for (int i = 0; i < diskSegments; ++i) {
+        const float angle = 2.f * kPi * static_cast<float>(i) / diskSegments;
+        XMStoreFloat3(&position, center + diskRadius * (std::cos(angle) * right + std::sin(angle) * up));
+        vertices.push_back({position, kSun, diskColor});
+        indices.insert(indices.end(), {diskIndex, diskIndex + 1 + static_cast<uint32_t>(i),
+                                       diskIndex + 1 + static_cast<uint32_t>((i + 1) % diskSegments)});
     }
     return renderer.CreateMesh(vertices, indices);
 }
@@ -119,28 +136,8 @@ void StoneBox(MeshData& mesh, float x, float y, float z, float width, float heig
     mesh.Quad({{{x, top, z}, {right, top, z}, {right, top, back}, {x, top, back}}});
 }
 
-void Arch(MeshData& mesh, float x, float z, bool detailed) {
-    constexpr float spring = 2.26f;
-    constexpr float inner = 1.18f;
-    constexpr float outer = 1.61f;
-    constexpr float depth = .74f;
-    const int courses = detailed ? 7 : 1;
-    constexpr float pillarWidth = .59f;
-    for (int side : {-1, 1}) {
-        const float center = x + side * (inner + .19f);
-        for (int course = 0; course < courses; ++course) {
-            const float joint = detailed ? .018f : 0.f;
-            StoneBox(mesh, center - pillarWidth / 2.f, course * spring / courses, z,
-                     pillarWidth, spring / courses - joint, depth);
-        }
-        if (detailed) {
-            StoneBox(mesh, center - .38f, 0.f, z - .07f, .76f, .20f, .88f);
-            StoneBox(mesh, center - .35f, spring - .15f, z - .05f, .70f, .15f, .84f);
-        }
-    }
-
-    const int stones = detailed ? 24 : 8;
-    const float mortar = detailed ? .009f : 0.f;
+void ArchRing(MeshData& mesh, float x, float z, float spring, float inner, float outer,
+              float depth, int stones, float mortar, bool endFaces) {
     auto point = [=](float angle, float radius, float positionZ) {
         return XMFLOAT3{x + std::cos(angle) * radius, spring + std::sin(angle) * radius, positionZ};
     };
@@ -159,11 +156,41 @@ void Arch(MeshData& mesh, float x, float z, bool detailed) {
         mesh.Quad({e, f, g, h});
         mesh.Quad({a, b, f, e});
         mesh.Quad({d, h, g, c});
-        if (detailed) {
+        if (endFaces) {
             mesh.Quad({a, e, h, d});
             mesh.Quad({b, c, g, f});
         }
     }
+}
+
+void Arch(MeshData& mesh, float x, float z, bool detailed) {
+    constexpr float spring = 2.26f;
+    constexpr float inner = 1.18f;
+    constexpr float outer = 1.61f;
+    constexpr float depth = .74f;
+    const int courses = detailed ? 7 : 1;
+    constexpr float pillarWidth = .59f;
+    for (int side : {-1, 1}) {
+        const float center = x + side * (inner + .19f);
+        for (int course = 0; course < courses; ++course) {
+            const float joint = detailed ? .018f : 0.f;
+            StoneBox(mesh, center - pillarWidth / 2.f, course * spring / courses, z,
+                     pillarWidth, spring / courses - joint, depth);
+        }
+        if (detailed) {
+            StoneBox(mesh, center - .25f, 0.f, z + .046f, .50f, spring, depth - .092f);
+            StoneBox(mesh, center - .38f, 0.f, z - .07f, .76f, .20f, .88f);
+            StoneBox(mesh, center - .35f, spring - .15f, z - .05f, .70f, .15f, .84f);
+        }
+    }
+
+    const int stones = detailed ? 24 : 8;
+    if (detailed) {
+        // Recessed continuous masonry closes the joints without filling their relief.
+        ArchRing(mesh, x, z + .045f, spring, inner + .024f, outer - .024f,
+                 depth - .09f, stones, 0.f, false);
+    }
+    ArchRing(mesh, x, z, spring, inner, outer, depth, stones, detailed ? .005f : 0.f, detailed);
 }
 
 MeshData Harbor(bool detailed) {
@@ -203,7 +230,7 @@ Texture StoneTexture(Renderer& renderer) {
         for (unsigned x = 0; x < edge; ++x) {
             const float u = static_cast<float>(x) / edge;
             const float v = static_cast<float>(y) / edge;
-            const float grain = .69f + .22f * Pattern(u, v) + .09f * Pattern(u * 7.f, v * 11.f);
+            const float grain = .81f + .13f * Pattern(u, v) + .06f * Pattern(u * 7.f, v * 11.f);
             const auto at = (y * edge + x) * 4;
             pixels[at] = static_cast<uint8_t>(255.f * grain);
             pixels[at + 1] = static_cast<uint8_t>(244.f * grain);
