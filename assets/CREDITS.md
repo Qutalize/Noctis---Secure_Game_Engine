@@ -14,6 +14,20 @@
 | `models/test_splat.ply` | 3DGS 点群（GS-01 ローダー検証用） | 自作（`tools/make_test_ply.py` で生成） | パブリックドメイン |
 | 地面 / 壁 / 木箱 / カード絵柄 | テクスチャ | 自作（`game/GroundTexture.cpp`・`game/CardArt.cpp` で手続き生成） | パブリックドメイン |
 | BGM / 効果音 | 音源 | 自作（`engine/audio/AudioPlayer.cpp` で手続き生成） | パブリックドメイン |
+| `coastal-assets/rock_face_01` | 岩壁モデル・PBR材質 | [Rock Face 01・Dario Barresi](https://polyhaven.com/a/rock_face_01) | CC0 |
+| `coastal-assets/outdoor_table_chair_set_01` | 木製テーブルと椅子・PBR材質 | [Outdoor Table Chair Set 01・James Ray Cock](https://polyhaven.com/a/outdoor_table_chair_set_01) | CC0 |
+| `coastal-assets/lantern_chandelier_01` | 吊り灯り・PBR材質 | [Lantern Chandelier 01・Kirill Sannikov](https://polyhaven.com/a/lantern_chandelier_01) | CC0 |
+| `coastal-assets/wood_planks_grey` | 桟橋の板材・PBR材質 | [Wood Planks Grey・Rob Tuytel](https://polyhaven.com/a/wood_planks_grey) | CC0 |
+| `coastal-assets/large_sandstone_blocks_01` | 遺跡と建築の砂岩・PBR材質 | [Large Sandstone Blocks 01・Rob Tuytel](https://polyhaven.com/a/large_sandstone_blocks_01) | CC0 |
+| `coastal-assets/roof_09` | ヴィラの瓦屋根・PBR材質 | [Roof 09・Rob Tuytel](https://polyhaven.com/a/roof_09) | CC0 |
+| `coastal-assets/coast_sand_01` | 浜・砂底・ヴィラ外壁の粒状材質 | [Coast Sand 01・Rob Tuytel](https://polyhaven.com/a/coast_sand_01) | CC0 |
+| `coastal-assets/{pier,villa,ruins}` | glTF形状 | 個別の寸法と配置を `assets/models/coastal/architecture.json` から書き出した独自モデル | 独自制作 |
+| `desert-assets/terrain_red_01` | 赤土の材質 | [Terrain Red 01・Rob Tuytel](https://polyhaven.com/a/terrain_red_01) | CC0 |
+| `desert-assets/worn_asphalt` | 舗装路の材質 | [Worn Asphalt・Amal Kumar](https://polyhaven.com/a/worn_asphalt) | CC0 |
+| `desert-assets/rock_face_01` | 路肩の岩壁 | [Rock Face 01・Dario Barresi](https://polyhaven.com/a/rock_face_01) | CC0 |
+| `desert-assets/{road_corridor,sandstone_mesas,roadside}` | glTF形状 | `assets/models/desert/route.json` と `tools/sunset/build_desert.py` で制作した独自モデル | 独自制作 |
+
+海岸デモの3モデルは `tools/sunset/coastal-assets.json` に固定した配布元から取得する。既存のローダー向けにJPEGをPNGへ変換し、吊り灯りの透過ガラス面は省いてフレームとランプを使用する。
 
 ---
 
@@ -248,3 +262,21 @@ RGB(125,107,90)）/ サイズ 0.067 x 0.251 x 0.868m（実寸の AK-47 とほぼ
 `models/creator/two-bone.glb`、`two-bone.fbx`、`two-bone-binary.fbx`は、このプロジェクトで作成した2ボーンの帯状モデルとSwing/Lift試験アニメーションです。CC0として提供します。外部ゲームの素材は含めません。生成ソースは`tools/advisor/model_fixtures.py`です。
 
 FBXのビルド時変換にはufbx 0.23.1を使用します。ソース・ライセンス・固定版の記録は`third_party/ufbx/`に保存しています。ゲームパッケージにはufbxをリンクしません。
+
+## Inland Tour
+
+地形、植生、遊歩道、工場建屋、タンク、配管、灯具は寸法と配置を定義したプロジェクト独自の glTF モデル。制作元は `tools/sunset/inland-layout.json` と `tools/sunset/build_inland.py`。
+
+| 用途 | Poly Haven CC0 素材 | 制作者 |
+|---|---|---|
+| 草地 | [Sparse Grass](https://polyhaven.com/a/sparse_grass) | Amal Kumar |
+| 湿地の泥、土道 | [Mud Forest](https://polyhaven.com/a/mud_forest) | eye-candy.xyz |
+| 湿地の木道 | [Wood Planks Grey](https://polyhaven.com/a/wood_planks_grey) | Poly Haven |
+| 建屋の屋根、タンク | [Corrugated Iron](https://polyhaven.com/a/corrugated_iron) | Dimitrios Savva、Jenelle van Heerden |
+| 外壁、煙突、配管 | [Rusty Corrugated Iron](https://polyhaven.com/a/rusty_corrugated_iron) | Charlotte Baglioni |
+
+草原と雨の森の改訂では、[Leafy Grass](https://polyhaven.com/a/leafy_grass)、[Grass Medium 01](https://polyhaven.com/a/grass_medium_01)、[Forest Ground 04](https://polyhaven.com/a/forest_ground_04)、[Rocky Trail](https://polyhaven.com/a/rocky_trail)、[Pine Bark](https://polyhaven.com/a/pine_bark)、[Pine Sapling Medium](https://polyhaven.com/a/pine_sapling_medium) の Poly Haven CC0 写真材質を使用。樹形とアトラスを載せる面の制作元は `tools/sunset/build_landscape.py`。旧湿地の写真材質は初版の記録向け。
+
+荒野の休憩所と内陸・海岸の人物は Innerscene の MakeHuman 由来CC0モデル。[Taylor](https://www.innerscene.com/tools/library/3d-parts/placing-an-item-ahead-3d-person-everyday-tasks-3904157a) · [Sage](https://www.innerscene.com/tools/library/3d-parts/sage-3d-person-woman-walking-a458e4c3) · [Micah、Taylor、Quinn](https://www.innerscene.com/tools/library/3d-parts/micah-taylor-and-quinn-3d-person-three-colleagues-talking-4bdae510)
+
+配布元と SHA-256 は `tools/sunset/landscape-materials.json`、`tools/sunset/inland-materials.json`、`tools/sunset/people-assets.json` に記録。人物は配布元のポーズを使い、画像を512px以下に縮小した。

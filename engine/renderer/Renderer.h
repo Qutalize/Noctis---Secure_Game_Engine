@@ -95,7 +95,9 @@ struct PbrMaterial {
     float roughnessFactor = 1.0f;
     float normalScale     = 1.0f;
     bool  hasTextures     = false;
+    bool  baseColorSrgb   = false;
     bool  valid           = false;
+    DirectX::XMFLOAT4 coastalParams{};
 };
 
 // VS/PS と共有する定数バッファのレイアウト。256B アライン必須。
@@ -117,7 +119,15 @@ struct alignas(256) SceneConstants {
     // ---- ステージL-02（PBR）で追加 ----
     DirectX::XMFLOAT4   baseColorFactor;  // rgba
     DirectX::XMFLOAT4   materialParams;   // x=metallic, y=roughness, z=法線強度, w=テクスチャ有無
+    DirectX::XMFLOAT4   coastalParams;    // x=描画種別, y=経過秒, z=夕景, w=薄暮
+    DirectX::XMFLOAT4   fillLight;        // xyz=位置, w=強度
+    DirectX::XMFLOAT4   accentLight;
+    DirectX::XMFLOAT4   rearLight;
+    DirectX::XMFLOAT4   coastalHaze;
+    DirectX::XMFLOAT4   scenicWeather;   // x=雨の強さ, y=経過秒, z=雨粒の画面スケール
+    DirectX::XMFLOAT4   scenicWake;      // xy=船尾のワールドXZ, z=船首の向き, w=航跡の強さ
 };
+static_assert(sizeof(SceneConstants) == 512);
 
 // 描画のタグ（インターセプト時に「これは敵ドローか」を判別する印。ステージJ-01）。
 // 汎用 DrawMesh とは別に、敵は DrawEnemyTagged 経由で Enemy タグ付きで描く。
@@ -171,7 +181,12 @@ public:
     ~Renderer();
 
     // basicOnly: 射撃場のLit+Overlayだけを初期化する。
-    bool Initialize(HWND hwnd, int width, int height, bool basicOnly = false);
+    // A null window selects deterministic WARP rendering for offline validation.
+    bool Initialize(HWND hwnd, int width, int height, bool basicOnly = false, bool multisample = false);
+    UINT SampleCount() const { return m_sampleCount; }
+
+    // Call after EndFrame on an offscreen renderer. Returns tightly packed RGBA8.
+    std::vector<uint8_t> ReadOffscreenRgba();
 
     // メッシュ生成（頂点 + 32bit インデックス）
     Mesh CreateMesh(const std::vector<Vertex>& vertices,
@@ -239,7 +254,7 @@ public:
 
     // 1 フレームの描画手順:
     //   BeginFrame(camera) → DrawMesh(...) を必要回数 → EndFrame()
-    void BeginFrame(const Camera& camera);
+    void BeginFrame(const Camera& camera, float verticalFovDegrees = 70.f, float farDistance = 500.f);
 #if ENGINE_MODEL_ANIMATION
     unsigned FrameSlot() const { return m_frameIndex; }
 #endif
@@ -350,6 +365,21 @@ public:
                              const DirectX::XMFLOAT3& color,
                              float intensity,
                              const DirectX::XMFLOAT3& ambient);
+    void SetWarmFillLight(const DirectX::XMFLOAT3& position, float intensity) {
+        m_fillLight = {position.x, position.y, position.z, intensity};
+    }
+    void SetWarmAccentLights(const DirectX::XMFLOAT4& accent, const DirectX::XMFLOAT4& rear) {
+        m_accentLight = accent;
+        m_rearLight = rear;
+    }
+    void SetCoastalHaze(const DirectX::XMFLOAT3& color, float density) {
+        m_coastalHaze = {color.x, color.y, color.z, density};
+    }
+    void SetScenicRain(float strength, float time) {
+        const float pixelScale = m_height > 0 ? 540.f / static_cast<float>(m_height) : 1.f;
+        m_scenicWeather = {strength, time, pixelScale, 0.f};
+    }
+    void SetScenicWake(const DirectX::XMFLOAT4& wake) { m_scenicWake = wake; }
 
     // 画面の横/縦比（2D オーバーレイのアスペクト補正に使う）。
     float GetAspect() const {
@@ -361,7 +391,7 @@ public:
     void Shutdown();
 
 private:
-    void CreateDevice();
+    void CreateDevice(bool useWarp);
     void CreateCommandObjects();
     void CreateSwapChain(HWND hwnd);
     void CreateRenderTargets();
@@ -540,6 +570,9 @@ private:
     UINT m_rtvDescriptorSize = 0;
 
     ComPtr<ID3D12Resource>          m_renderTargets[kFrameCount];
+    ComPtr<ID3D12Resource> m_multisampleTarget;
+    D3D12_CPU_DESCRIPTOR_HANDLE m_multisampleRtv{};
+    UINT m_sampleCount = 1;
     ComPtr<ID3D12CommandAllocator>  m_commandAllocators[kFrameCount];
     ComPtr<ID3D12GraphicsCommandList> m_commandList;
 
@@ -670,6 +703,12 @@ private:
     DirectX::XMFLOAT4 m_lightDir{ 0.4f, -1.0f, 0.3f, 0.0f };   // 後で正規化して使う
     DirectX::XMFLOAT4 m_lightColor{ 1.0f, 0.98f, 0.95f, 1.0f }; // w=強度
     DirectX::XMFLOAT4 m_ambient{ 0.25f, 0.25f, 0.30f, 0.0f };
+    DirectX::XMFLOAT4 m_fillLight{};
+    DirectX::XMFLOAT4 m_accentLight{};
+    DirectX::XMFLOAT4 m_rearLight{};
+    DirectX::XMFLOAT4 m_coastalHaze{};
+    DirectX::XMFLOAT4 m_scenicWeather{};
+    DirectX::XMFLOAT4 m_scenicWake{};
     DirectX::XMFLOAT3 m_cameraPos{ 0.0f, 0.0f, 0.0f };          // BeginFrame で更新
 
     bool m_initialized = false;

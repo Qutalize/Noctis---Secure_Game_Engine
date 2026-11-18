@@ -40,7 +40,7 @@ def decode(raw):
     return dict(error=error,seat=seat,seq=seq,rev=rev,round=round_id,turn=turn,victim=victim,loser=loser,
                 own=own,counts=counts,discarded=discarded,phase=phase,humans=humans)
 
-class AuthorityTests(unittest.TestCase):
+class AuthorityHarness(unittest.TestCase):
     def setUp(self):
         self.folder=RUN/self._testMethodName
         self.folder.mkdir(parents=True,exist_ok=False)
@@ -92,6 +92,7 @@ class AuthorityTests(unittest.TestCase):
         peers=[self.connect(s)[0] for s in range(4)]
         return peers,[self.poll(p) for p in peers]
 
+class AuthorityTests(AuthorityHarness):
     def test_recipient_frames_and_credentials(self):
         server=self.start();peers,states=self.all_seats()
         self.assertTrue(all(s['phase']==1 for s in states))

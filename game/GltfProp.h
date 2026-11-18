@@ -18,7 +18,8 @@
 class GltfProp {
 public:
     // path の .glb/.gltf を読み込む。成功/失敗はログに出る。
-    bool Load(Renderer& renderer, const std::string& path);
+    bool Load(Renderer& renderer, const std::string& path, bool baseColorSrgb = false,
+              bool filterDistantDetail = false);
 
     bool IsLoaded() const { return m_loaded; }
 
@@ -33,6 +34,7 @@ public:
     // 読み込み済みの全パーツを指定 world 行列で描く。ignoreDepth=true で深度無視
     // （一人称ビューモデルのように常に手前へ描きたい場合に使う）。
     void Draw(Renderer& renderer, const DirectX::XMMATRIX& world, bool ignoreDepth = false) const;
+    void SetScenicEffect(const DirectX::XMFLOAT4& params);
 
 private:
     struct Part {

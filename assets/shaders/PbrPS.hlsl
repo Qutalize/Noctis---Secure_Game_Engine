@@ -30,7 +30,17 @@ cbuffer SceneConstants : register(b0)
     float4   gShadowParams;
     float4   gBaseColorFactor;
     float4   gMaterialParams;   // x=metallic, y=roughness, z=法線マップ強度, w=テクスチャフラグ
+    float4 gCoastalParams;
+    float4 gFillLight;
+    float4 gAccentLight;
+    float4 gRearLight;
+    float4 gCoastalHaze;
+    float4 gScenicWeather;
+    float4 gScenicWake;
 };
+
+#include "SunsetWaves.hlsli"
+#include "WarmFill.hlsli"
 
 Texture2D gBaseColorMap : register(t0);
 Texture2D gNormalMap    : register(t1);
@@ -113,9 +123,103 @@ float3 FresnelSchlick(float cosTheta, float3 f0)
     return f0 + (1.0f - f0) * pow(saturate(1.0f - cosTheta), 5.0f);
 }
 
+float RainLight(float2 pixel)
+{
+    if (gScenicWeather.x <= 0.f) return 0.f;
+    float2 rain = pixel * gScenicWeather.z;
+    rain.x -= rain.y * .20f;
+    float shaft = floor(rain.x / 11.f);
+    float speed = frac(sin(shaft * 52.71f) * 614.33f);
+    rain.y -= (440.f + speed * 410.f) * gScenicWeather.y;
+    float cell = floor(rain.y / 79.f);
+    float seed = frac(sin(dot(float2(shaft, cell), float2(61.2f, 17.31f))) * 4375.21f);
+    float2 local = float2(frac(rain.x / 11.f) * 11.f, frac(rain.y / 79.f) * 79.f);
+    float width = 1.f - smoothstep(.22f, .86f, abs(local.x - (1.f + 9.f * seed)));
+    float tail = smoothstep(2.f, 11.f, local.y) * (1.f - smoothstep(12.f, 29.f, local.y));
+    return gScenicWeather.x * width * tail * .19f * smoothstep(.36f, .77f, seed);
+}
+
 float4 PSMain(PSInput input) : SV_Target
 {
+    if (gCoastalParams.x > 2.5f) {
+        return float4(gBaseColorFactor.rgb * lerp(.15f, 1.f, gCoastalParams.w), 1.0f);
+    }
+    if (gCoastalParams.x > 1.5f) {
+        float3 direction = normalize(input.worldPos - gCameraPos.xyz);
+        float3 sky = CoastalSky(direction, normalize(-gLightDir.xyz),
+                                 gCoastalParams.z, gCoastalParams.w, gCoastalParams.y);
+        if (gScenicWeather.x <= 0.f) return float4(saturate(sky), 1.f);
+        float clouds = CoastalNoise(direction.xz * 7.f + direction.y * 5.f + gScenicWeather.y * .025f);
+        float3 overcast = lerp(float3(.33f, .39f, .43f), float3(.64f, .69f, .72f), clouds);
+        return float4(saturate(lerp(sky, overcast, gScenicWeather.x) + RainLight(input.position.xy)), 1.0f);
+    }
+    if (gCoastalParams.x > 0.5f) {
+        const float time = gCoastalParams.y;
+        const float sunset = gCoastalParams.z;
+        const float dusk = gCoastalParams.w;
+        const float2 seaPosition = input.worldPos.xz;
+        const float wave = WaveSurface(seaPosition, time);
+        const float distanceToEye = length(gCameraPos.xyz - input.worldPos);
+        const float horizon = smoothstep(30.0f, 145.0f, distanceToEye);
+        const float2 wind = seaPosition - time * float2(.25f, .36f);
+        const float2 patch = float2(CoastalNoise(wind * .19f), CoastalNoise(wind.yx * .31f));
+        const float2 rippleUV = wind * float2(2.8f, 6.5f) + patch * 2.3f;
+        const float footprint = max(length(ddx(rippleUV)), length(ddy(rippleUV)));
+        const float rippleGain = .055f * (1.0f - smoothstep(.22f, 1.15f, footprint));
+        const float2 ripple = float2(CoastalNoise(rippleUV) - .5f, CoastalNoise(rippleUV.yx + 3.41f) - .5f);
+        const float2 gradient = float2(WaveSurface(seaPosition + float2(.13f, 0), time) - wave,
+                                      WaveSurface(seaPosition + float2(0, .13f), time) - wave) / .13f;
+        const float2 micro = FineRipples(seaPosition, time) * .055f;
+        const float2 slope = (gradient * .59f + ripple * rippleGain + micro) * lerp(1.0f, .12f, horizon);
+        const float3 normal = normalize(float3(-slope.x, 1.0f, -slope.y));
+        const float3 view = normalize(gCameraPos.xyz - input.worldPos);
+        const float3 reflected = reflect(-view, normal);
+        const float3 sun = normalize(-gLightDir.xyz);
+        const float fresnel = .025f + .82f * pow(1.0f - saturate(dot(normal, view)), 5.0f);
+        const float3 sky = CoastalSky(normalize(float3(reflected.x, max(.02f, reflected.y), reflected.z)),
+                                       sun, sunset, dusk, time);
+        const float alignment = saturate(dot(reflected, sun));
+        const float sparkle = lerp(.44f, 1.0f, CoastalNoise(rippleUV * .42f));
+        const float glint = (pow(alignment, 100.0f) * .20f + pow(alignment, 580.0f) * sparkle * 1.25f) *
+            (1.0f - dusk) * smoothstep(-.02f, .08f, sun.y);
+        const float shore = seaPosition.y - Shoreline(seaPosition.x);
+        const float runup = .22f + .47f * CoastalNoise(float2(seaPosition.x * .64f, time * .58f));
+        const float foamLine = 1.0f - smoothstep(.048f, .26f, abs(shore - runup));
+        const float wash = foamLine * smoothstep(.30f, .77f, CoastalNoise(wind * float2(3.8f, 5.1f) + patch));
+        const float shadow = ComputeShadow(input.worldPos, saturate(dot(normal, sun)));
+        const float depth = max(.024f, shore * (.21f + .047f * patch.x) + wave);
+        const float daylight = lerp(1.f, .24f, dusk);
+        const float3 bottom = CoastalBottom(seaPosition, depth, view, slope, time, daylight, gBaseColorMap, gSampler);
+        const float3 tint = lerp(bottom, float3(.056f, .32f, .45f) * daylight,
+                                 smoothstep(2.6f, 4.3f, depth));
+        const float3 sea = lerp(tint, sky, fresnel) +
+            shadow * glint * lerp(float3(.83f, .91f, 1.f), float3(1.f, .64f, .35f), sunset);
+        const float3 foam = float3(.82f, .90f, .85f) * lerp(1.0f, .40f, dusk);
+        float wake = 0.f;
+        if (gScenicWake.w > 0.f) {
+            float2 heading = float2(sin(gScenicWake.z), cos(gScenicWake.z));
+            float2 offset = seaPosition - gScenicWake.xy;
+            float behind = -dot(offset, heading);
+            float across = abs(dot(offset, float2(heading.y, -heading.x)));
+            float distance = max(0.f, behind);
+            float plume = .56f + .26f * distance;
+            float edge = 1.f - smoothstep(.12f, .62f + distance * .018f, abs(across - plume));
+            float center = 1.f - smoothstep(.10f, .6f + distance * .026f, across);
+            float gaps = CoastalNoise(seaPosition * 1.62f + heading * time * .63f);
+            wake = saturate(edge * .85f + center * .42f) * smoothstep(0.f, .48f, behind) *
+                (1.f - smoothstep(8.f, 31.f, behind)) * smoothstep(.22f, .64f, gaps) * gScenicWake.w;
+        }
+        const float3 color = lerp(lerp(sea, foam, wash * .72f), foam * 1.23f, wake);
+        return float4(saturate(lerp(color, sky, .38f * horizon)), 1.0f);
+    }
     const bool hasTextures = (gMaterialParams.w > 0.5f);
+    const float2 texDx = ddx(input.uv);
+    const float2 texDy = ddy(input.uv);
+    const bool filterDistantDetail = gCoastalParams.x < -1.5f;
+    const bool foliage = gCoastalParams.x == -3.f || gCoastalParams.x == -5.f;
+    const bool meadow = gCoastalParams.x == -7.f;
+    const bool terrain = gCoastalParams.x == -4.f || meadow;
+    const float footprint = max(length(texDx), length(texDy));
 
     // --- マテリアル値の取得 ---
     float4 albedo = gBaseColorFactor;
@@ -124,7 +228,31 @@ float4 PSMain(PSInput input) : SV_Target
     float  ao        = 1.0f;
 
     if (hasTextures) {
-        albedo *= gBaseColorMap.Sample(gSampler, input.uv);
+        float4 baseSample = gBaseColorMap.Sample(gSampler, input.uv);
+        if (foliage || gCoastalParams.x == -6.f) {
+            clip(baseSample.a - (foliage ? .31f : .45f));
+        }
+        if (filterDistantDetail && !foliage) {
+            float4 area = gBaseColorMap.SampleGrad(gSampler,input.uv + .35f*(texDx+texDy),texDx,texDy) +
+                gBaseColorMap.SampleGrad(gSampler,input.uv + .35f*(texDx-texDy),texDx,texDy) +
+                gBaseColorMap.SampleGrad(gSampler,input.uv + .35f*(-texDx+texDy),texDx,texDy) +
+                gBaseColorMap.SampleGrad(gSampler,input.uv - .35f*(texDx+texDy),texDx,texDy);
+            baseSample = lerp(baseSample,area*.25f,smoothstep(.003f,.016f,footprint));
+        }
+        if (gCoastalParams.x < -.5f && !filterDistantDetail) {
+            float inland = Shoreline(input.worldPos.x) - input.worldPos.z;
+            float vegetation = CoastalNoise(input.worldPos.xz * .39f) * .7f +
+                CoastalNoise(input.worldPos.xz * 1.37f) * .3f;
+            float greenery = smoothstep(3.f, 12.f, inland + 4.f * vegetation) *
+                smoothstep(3.6f, 7.7f, abs(input.worldPos.x));
+            baseSample.rgb = lerp(baseSample.rgb * lerp(.92f, 1.36f, smoothstep(-.6f, 1.4f, inland)),
+                baseSample.rgb * float3(.64f, .84f, .47f), greenery * .82f);
+        }
+        if (gMaterialParams.w > 1.5f) {
+            baseSample.rgb = lerp(baseSample.rgb / 12.92f,
+                pow((baseSample.rgb + .055f) / 1.055f, 2.4f), step(.04045f, baseSample.rgb));
+        }
+        albedo *= baseSample;
         // glTF の慣習: ORM テクスチャは R=AO / G=roughness / B=metallic。
         // 係数（gMaterialParams）はテクスチャに乗算する形で使う。
         float3 orm = gOrmMap.Sample(gSampler, input.uv).rgb;
@@ -133,6 +261,21 @@ float4 PSMain(PSInput input) : SV_Target
         metallic  *= orm.b;
     }
     // roughness が 0 だとハイライトが 1 ピクセルの点になって破綻するので下限を切る。
+    float wet = 0.f;
+    if (terrain) {
+        const float broad = CoastalNoise(input.worldPos.xz * .024f);
+        const float detail = CoastalNoise(input.worldPos.xz * .13f);
+        albedo.rgb *= lerp(.70f, 1.28f, broad * .78f + detail * .22f);
+        if (meadow) {
+            const float terraces = CoastalNoise(input.worldPos.xz * float2(.038f,.062f) + 2.1f);
+            const float growth = smoothstep(.30f,.74f,.58f*broad+.42f*terraces);
+            const float3 meadowColor = lerp(float3(.022f,.039f,.008f),float3(.010f,.079f,.014f),growth);
+            albedo.rgb = albedo.rgb * float3(.72f,1.12f,.62f) + meadowColor * lerp(.51f,1.27f,detail);
+        }
+        wet = gScenicWeather.x * smoothstep(.24f, .79f, detail);
+        albedo.rgb *= 1.f - .22f * wet;
+        roughness = lerp(roughness, .18f, wet * .74f);
+    }
     roughness = clamp(roughness, 0.04f, 1.0f);
     metallic  = saturate(metallic);
 
@@ -142,6 +285,7 @@ float4 PSMain(PSInput input) : SV_Target
         // 法線マップは [0,1] に詰められているので [-1,1] へ戻す。
         float3 tn = gNormalMap.Sample(gSampler, input.uv).xyz * 2.0f - 1.0f;
         tn.xy *= gMaterialParams.z;   // 強度（0 で法線マップ無効）
+        if (filterDistantDetail) tn.xy *= 1.f - .96f*smoothstep(.003f,.022f,footprint);
         float3x3 TBN = float3x3(normalize(input.tangent),
                                 normalize(input.bitangent),
                                 N);
@@ -149,6 +293,11 @@ float4 PSMain(PSInput input) : SV_Target
     }
 
     float3 V = normalize(gCameraPos.xyz - input.worldPos);
+    if (foliage) {
+        N = normalize(lerp(N * (dot(N, V) < 0.f ? -1.f : 1.f), float3(0.f, 1.f, 0.f), .52f));
+        const float colorPatch = CoastalNoise(input.worldPos.xz * .35f);
+        albedo.rgb *= lerp(.68f, 1.19f, (1.f - input.uv.y) * .49f + colorPatch * .51f);
+    }
     float3 L = normalize(-gLightDir.xyz);   // gLightDir は光が進む向き
     float3 H = normalize(V + L);
 
@@ -184,7 +333,10 @@ float4 PSMain(PSInput input) : SV_Target
     // 今は定数の環境光 × AO で代用している。金属が暗く沈みがちなのはこのため。
     float3 ambient = gAmbient.rgb * albedo.rgb * ao;
 
-    float3 color = ambient + direct;
+    float3 lamps = WarmFill(gFillLight, input.worldPos, N) + WarmFill(gAccentLight, input.worldPos, N) +
+                   WarmFill(gRearLight, input.worldPos, N);
+    float3 color = ambient + direct + albedo.rgb * lamps;
+    color += wet * float3(.10f, .14f, .18f) * pow(1.f - ndotv, 3.f);
 #if ENGINE_RT_REFLECTIONS
     color = lerp(color,RayReflection(input.worldPos,N,V,L,gLightColor.rgb*gLightColor.w,gAmbient.rgb),FresnelSchlick(ndotv,f0) * (1.0f - .7f * roughness));
 #endif
@@ -204,5 +356,6 @@ float4 PSMain(PSInput input) : SV_Target
     color = color / (color + 1.0f);
     color = pow(color, 1.0f / 2.2f);   // ガンマ補正（sRGB 相当）
 
-    return float4(color, albedo.a);
+    const float haze = 1.f - exp(-max(0.f, dist - 24.f) * gCoastalHaze.w);
+    return float4(saturate(lerp(color, gCoastalHaze.rgb, haze) + RainLight(input.position.xy)), albedo.a);
 }

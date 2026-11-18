@@ -1,0 +1,267 @@
+name: Sunset Harbor and open security
+
+on: [push, workflow_dispatch]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sunset:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          ref: 1219ab938b674f6d561990c8ded8c6f9b4facc91
+          path: coastal-baseline
+      - name: Check video and asset conversion tools
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+      - name: Configure and build the native demo
+        run: |
+          cmake -S . -B build-ci -G "Visual Studio 18 2026" -A x64 -DGAME_PROFILE=all -DBUILD_SUNSET_WALK=ON
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build-ci --config Release --target sunset_walk --parallel 2
+      - name: Verify and prepare the CC0 scenery assets
+        run: python -B tools/sunset/prepare_assets.py build-ci/Release/coastal-assets
+      - name: Replay walk and capture controlled asset pairs using WARP
+        run: |
+          $exe = "build-ci/Release/SunsetWalk.exe"
+          & $exe --self-test
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $exe --capture sunset-evidence
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B tools/sunset/verify_captures.py sunset-evidence
+      - name: Capture the previous revision with the same cameras and times
+        run: |
+          Copy-Item -LiteralPath game/sunset/Main.cpp -Destination coastal-baseline/game/sunset/Main.cpp
+          cmake -S coastal-baseline -B build-baseline -G "Visual Studio 18 2026" -A x64 -DGAME_PROFILE=all -DBUILD_SUNSET_WALK=ON "-DCMAKE_CXX_FLAGS=/EHsc /DSUNSET_BASELINE"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build-baseline --config Release --target sunset_walk --parallel 2
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item -Path build-ci/Release/coastal-assets -Destination build-baseline/Release/coastal-assets -Recurse
+          & build-baseline/Release/SunsetWalk.exe --compare comparison-before
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & build-ci/Release/SunsetWalk.exe --compare comparison-after
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & build-ci/Release/SunsetWalk.exe --compare-aa comparison-ssaa
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & build-ci/Release/SunsetWalk.exe --compare-msaa comparison-msaa
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B tools/sunset/compare_revisions.py comparison-before comparison-after comparison-ssaa comparison-msaa sunset-evidence
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coastal-reference-frames
+          path: |
+            sunset-evidence/*-before.png
+            sunset-evidence/*-after.png
+            sunset-evidence/*-after-aa.png
+            sunset-evidence/*-after-msaa.png
+            sunset-evidence/revision-comparison.json
+          if-no-files-found: error
+          retention-days: 2
+      - name: Render the trailer and verify the MP4
+        run: |
+          & build-ci/Release/SunsetWalk.exe --pv-frames pv-frames
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B tools/sunset/build_pv.py pv-frames sunset-evidence
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coastal-preview
+          path: |
+            sunset-evidence/wide-after-msaa.png
+            sunset-evidence/villa-after-msaa.png
+            sunset-evidence/dining-after-msaa.png
+            sunset-evidence/pv-results.json
+            sunset-evidence/Sunset-Resort-PV.mp4
+          if-no-files-found: error
+          retention-days: 5
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sunset-evidence
+          path: |
+            sunset-evidence/*.png
+            sunset-evidence/samples.csv
+            sunset-evidence/results.json
+            sunset-evidence/pv-results.json
+            sunset-evidence/revision-comparison.json
+            sunset-evidence/Sunset-Resort-PV.mp4
+            sunset-evidence/sunset-ambience.wav
+            sunset-evidence/villa-music.wav
+            build-ci/Release/SunsetWalk.exe
+            build-ci/Release/shaders/*.dxil
+            build-ci/Release/coastal-assets/**
+            assets/CREDITS.md
+          if-no-files-found: error
+          retention-days: 5
+
+  desert-road:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build the native desert demo
+        run: |
+          cmake -S . -B desert-ci -G "Visual Studio 18 2026" -A x64 -DGAME_PROFILE=all -DBUILD_SUNSET_WALK=ON
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build desert-ci --config Release --target desert_road --parallel 2
+      - name: Prepare the desert glTF and CC0 materials
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          python -B tools/sunset/prepare_assets.py desert-ci/Release/desert-assets --desert
+      - name: Validate the road and render the three cuts with WARP MSAA
+        run: |
+          & desert-ci/Release/DesertRoad.exe --self-test
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & desert-ci/Release/DesertRoad.exe --capture desert-frames
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B tools/sunset/build_desert_pv.py desert-frames desert-evidence
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desert-preview
+          path: desert-evidence/**
+          if-no-files-found: error
+          retention-days: 5
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desert-road
+          path: |
+            desert-ci/Release/DesertRoad.exe
+            desert-ci/Release/desert-assets/**
+            desert-ci/Release/shaders/*.dxil
+            assets/CREDITS.md
+          if-no-files-found: error
+          retention-days: 5
+
+  inland-tour:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build InlandTour
+        run: |
+          cmake -S . -B inland-ci -G "Visual Studio 18 2026" -A x64 -DGAME_PROFILE=all -DBUILD_SUNSET_WALK=ON
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build inland-ci --config Release --target inland_tour --parallel 2
+      - name: Prepare the linked sets and pinned materials
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          python -B tools/sunset/prepare_assets.py inland-ci/Release/inland-assets --inland
+      - name: Exercise the route and render the preview with WARP MSAA
+        run: |
+          & inland-ci/Release/InlandTour.exe --self-test
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & inland-ci/Release/InlandTour.exe --capture inland-frames
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B tools/sunset/build_desert_pv.py inland-frames inland-evidence --inland
+      - uses: actions/upload-artifact@v7
+        with:
+          name: inland-preview
+          path: inland-evidence/**
+          if-no-files-found: error
+          retention-days: 5
+      - uses: actions/upload-artifact@v7
+        with:
+          name: inland-tour
+          path: |
+            inland-ci/Release/InlandTour.exe
+            inland-ci/Release/inland-assets/**
+            inland-ci/Release/shaders/*.dxil
+            assets/CREDITS.md
+          if-no-files-found: error
+          retention-days: 5
+
+  journey-coast:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build the coastal voyage capture
+        run: |
+          cmake -S . -B voyage-ci -G "Visual Studio 18 2026" -A x64 -DGAME_PROFILE=all -DBUILD_SUNSET_WALK=ON
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build voyage-ci --config Release --target sunset_walk --parallel 2
+      - name: Prepare coastal assets and capture the voyage
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          python -B tools/sunset/prepare_assets.py voyage-ci/Release/coastal-assets
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & voyage-ci/Release/SunsetWalk.exe --voyage-frames voyage-frames
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B tools/sunset/build_journey.py coast voyage-frames voyage-evidence
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item voyage-frames/voyage.csv voyage-evidence/voyage.csv
+      - uses: actions/upload-artifact@v7
+        with:
+          name: voyage-cut
+          path: voyage-evidence/*
+          if-no-files-found: error
+          retention-days: 2
+
+  journey:
+    needs: [desert-road, inland-tour, journey-coast]
+    runs-on: windows-2025
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
+        with:
+          name: desert-preview
+          path: clips/desert
+      - uses: actions/download-artifact@v8
+        with:
+          name: inland-preview
+          path: clips/inland
+      - uses: actions/download-artifact@v8
+        with:
+          name: voyage-cut
+          path: clips/coast
+      - name: Assemble and decode the full film
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          python -B tools/sunset/build_journey.py assemble clips/desert/Desert-Road-PV.mp4 clips/inland/Inland-Tour-PV.mp4 clips/coast/voyage.mp4 journey-output
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item -Path clips/coast/*.png,clips/coast/coastal-voyage.json,clips/coast/voyage.csv -Destination journey-output/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: journey-preview
+          path: |
+            journey-output/*.mp4
+            journey-output/*.png
+            journey-output/*.json
+            journey-output/*.csv
+          if-no-files-found: error
+          retention-days: 5
+
+  open-security:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build and test the public server
+        run: |
+          cargo build --manifest-path server_rs/Cargo.toml --release --locked
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --manifest-path server_rs/Cargo.toml --release --locked
+      - name: Exercise the server from a protocol-aware modified client
+        run: python -B tools/card_client_probe/test_open_security.py

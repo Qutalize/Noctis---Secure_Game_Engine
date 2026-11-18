@@ -5,7 +5,7 @@
 
 using namespace DirectX;
 
-bool GltfProp::Load(Renderer& renderer, const std::string& path) {
+bool GltfProp::Load(Renderer& renderer, const std::string& path, bool baseColorSrgb, bool filterDistantDetail) {
     m_parts.clear();
     m_loaded = false;
 
@@ -43,6 +43,8 @@ bool GltfProp::Load(Renderer& renderer, const std::string& path) {
             part.pbrMaterial = renderer.CreatePbrMaterial(baseTex, nrmTex, ormTex);
             if (part.pbrMaterial.valid) {
                 part.pbrMaterial.baseColorFactor = prim.baseColor;
+                part.pbrMaterial.baseColorSrgb   = baseColorSrgb;
+                if (filterDistantDetail) part.pbrMaterial.coastalParams.x = -2.f;
                 part.pbrMaterial.metallicFactor  = prim.metallicFactor;
                 part.pbrMaterial.roughnessFactor = prim.roughnessFactor;
                 part.pbrMaterial.normalScale     = prim.normalScale;
@@ -85,5 +87,11 @@ void GltfProp::Draw(Renderer& renderer, const XMMATRIX& world, bool ignoreDepth)
         } else {
             renderer.DrawMesh(part.mesh, world, ignoreDepth);
         }
+    }
+}
+
+void GltfProp::SetScenicEffect(const XMFLOAT4& params) {
+    for (auto& part : m_parts) {
+        part.pbrMaterial.coastalParams = params;
     }
 }

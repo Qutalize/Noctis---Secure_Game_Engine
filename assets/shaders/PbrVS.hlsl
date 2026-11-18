@@ -22,7 +22,10 @@ cbuffer SceneConstants : register(b0)
     // ステージL-02 で追加。C++ 側 SceneConstants とメンバ順を一致させること。
     float4   gBaseColorFactor;  // rgba: baseColor 係数
     float4   gMaterialParams;   // x=metallic, y=roughness, z=法線マップ強度, w=テクスチャ有無フラグ
+    float4   gCoastalParams;
 };
+
+#include "SunsetWaves.hlsli"
 
 struct VSInput
 {
@@ -46,6 +49,16 @@ VSOutput VSMain(VSInput input)
 {
     VSOutput o;
     float4 wp = mul(float4(input.position, 1.0f), gWorld);
+    if (gCoastalParams.x > 0.5f && gCoastalParams.x < 1.5f) {
+        wp.y += WaveSurface(wp.xz, gCoastalParams.y);
+    }
+    if (gCoastalParams.x == -3.f) {
+        // Wind adds a small movement to the scanned grass clusters.
+        float phase = dot(wp.xz, float2(.58f, .29f)) - gCoastalParams.y * 2.1f;
+        float gust = CoastalNoise(wp.xz * .13f - gCoastalParams.y * float2(.16f, .07f));
+        float tip = 1.f - input.uv.y;
+        wp.xz += float2(1.f, .38f) * tip * tip * (.007f + .027f * gust) * sin(phase);
+    }
     o.worldPos = wp.xyz;
     o.position = mul(mul(wp, gView), gProj);
 

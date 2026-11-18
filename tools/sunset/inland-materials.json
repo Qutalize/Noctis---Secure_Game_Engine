@@ -1,0 +1,58 @@
+{
+  "sparse_grass": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/sparse_grass/sparse_grass_diff_1k.jpg",
+      "ae94f2b34597b9108eefd88217f55eccaec6d6b382e858a478ee92df90e66617"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/sparse_grass/sparse_grass_nor_gl_1k.jpg",
+      "1c840a24807346ddaaf94a5057aee4078fcec3a4cd84bfe45da7d3b480ef460b"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/sparse_grass/sparse_grass_arm_1k.jpg",
+      "209f6793060a176272ace42cabab21fdf21fe963f79267988320614b374414a8"
+    ]
+  },
+  "mud_forest": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/mud_forest/mud_forest_diff_1k.jpg",
+      "6b874ef298dd06671624032311e0dd1456251a92e396883852bf5ec75cd099eb"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/mud_forest/mud_forest_nor_gl_1k.jpg",
+      "7ccce706a05d804ecf961c4c6be2ab5f496e717e05b13bd87fa086c9e082c3cf"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/mud_forest/mud_forest_arm_1k.jpg",
+      "5c2e4a8ab7146f98350d11de3c6a3032741509a7ac8aaf5c34b8277fb23d568b"
+    ]
+  },
+  "corrugated_iron": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/corrugated_iron/corrugated_iron_diff_1k.jpg",
+      "7f3649dd0d056a55a910146f09b1d5298370696a90f511a255fb4c5715bb4b58"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/corrugated_iron/corrugated_iron_nor_gl_1k.jpg",
+      "e98b839ae681ba929eb80f07348c70d0731b48239abe69268effab18420cd271"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/corrugated_iron/corrugated_iron_arm_1k.jpg",
+      "5502fae08a0b530cff8608951dc180d45c06b2f2f92f2f893c894710b7ee1792"
+    ]
+  },
+  "rusty_corrugated_iron": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rusty_corrugated_iron/rusty_corrugated_iron_diff_1k.jpg",
+      "2525deb17323eefe39e8a90c6384033e31832b6aa9736bea27f81f4148508087"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rusty_corrugated_iron/rusty_corrugated_iron_nor_gl_1k.jpg",
+      "09f015ab44ff5e5a2f8e3f4718f2848df9eaa1ce42f184d361a5b902f200a216"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rusty_corrugated_iron/rusty_corrugated_iron_arm_1k.jpg",
+      "ae6da49b59bfe3e3eba5dd4c738a5f82e190c562e582f6680e89e0b1dc9c4674"
+    ]
+  }
+}

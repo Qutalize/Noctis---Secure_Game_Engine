@@ -1,0 +1,58 @@
+{
+  "wood_planks_grey": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_planks_grey/wood_planks_grey_diff_1k.jpg",
+      "d758be23e8fe7bfbd73bc4ab257cfd59406e1835f6557c12a67cd4fdb15de0d8"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_planks_grey/wood_planks_grey_nor_gl_1k.jpg",
+      "5e570e57d688b016b217b9e8e0592f9a8b3364406e22bf6cd775da990452bdb6"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_planks_grey/wood_planks_grey_arm_1k.jpg",
+      "0464853147811dd6dcf9f286ca3753fb63fa654d081ae708070fbf0fd4614d97"
+    ]
+  },
+  "large_sandstone_blocks_01": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/large_sandstone_blocks_01/large_sandstone_blocks_01_diff_1k.jpg",
+      "2607cbd22d9f34aa13febe348cd9eb8f952fbcba3997b9393b1bc5ae19e7c5f3"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/large_sandstone_blocks_01/large_sandstone_blocks_01_nor_gl_1k.jpg",
+      "1cd19847cb8b822037c5d45d15b9ed7ffa16141aa6ea1045541935e5b4fcee82"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/large_sandstone_blocks_01/large_sandstone_blocks_01_arm_1k.jpg",
+      "7ee5589fefe66d3c722fb9286d4845b0d972d3fd9eb172027555250bd54944a8"
+    ]
+  },
+  "roof_09": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/roof_09/roof_09_diff_1k.jpg",
+      "6baaf5dca30d14566791ad6603e3b3dbd69b76990fd8d1314efc35dd2655e818"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/roof_09/roof_09_nor_gl_1k.jpg",
+      "60fc61343316bbe73399cdddfb3da8b47d41c2d147e2b3384f244f8be9ed1668"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/roof_09/roof_09_arm_1k.jpg",
+      "837caae1811ad8d7633ffdfe24d78090169210b38098be3e63716870cf8c562f"
+    ]
+  },
+  "coast_sand_01": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/coast_sand_01/coast_sand_01_diff_1k.jpg",
+      "58af2e40100f7f405703a86d593af64379f822c4786850def23ecfc921450d54"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/coast_sand_01/coast_sand_01_nor_gl_1k.jpg",
+      "fe4d045aec99e71e80f682fcf0ad958d2dff1fe614b73178b304d1bac047b54a"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/coast_sand_01/coast_sand_01_arm_1k.jpg",
+      "eeb552fb26de45ae5c52d3db6f96f8f0414fdbfa335c1d27ef5f59b6ef01a5c8"
+    ]
+  }
+}

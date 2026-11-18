@@ -67,6 +67,11 @@ add_compile_definitions($<$<CONFIG:Debug>:_DEBUG>)
 #   ここでは定義しない＝マクロ再定義警告 C4005 を避ける）
 add_compile_definitions(NOMINMAX UNICODE _UNICODE)
 
+option(BUILD_SUNSET_WALK "Build the interactive Sunset Harbor preview" OFF)
+if(BUILD_SUNSET_WALK AND GAME_PROFILE STREQUAL "range")
+    message(FATAL_ERROR "Sunset Harbor requires the all or fps profile")
+endif()
+
 set(RUNTIME_CONFIG "" CACHE FILEPATH "JSON configuration for a selected creator runtime")
 if(RUNTIME_CONFIG)
     include(cmake/SelectedRuntime.cmake)
@@ -316,15 +321,16 @@ if (DXC_EXE)
             OUTPUT ${SHADER_BIN_DIR}/${OUT}
             COMMAND ${DXC_EXE} -E ${ENTRY} -T ${PROFILE}
                     ${_shader_strip}
-                    -Fo ${SHADER_BIN_DIR}/${OUT}
+                    -I ${CMAKE_SOURCE_DIR}/assets/shaders -Fo ${SHADER_BIN_DIR}/${OUT}
                     ${CMAKE_SOURCE_DIR}/assets/shaders/${SRC}
             DEPENDS ${CMAKE_SOURCE_DIR}/assets/shaders/${SRC}
+                    ${ARGN}
             COMMENT "dxc compiling ${SRC} -> ${OUT}"
             VERBATIM)
     endfunction()
 
     compile_shader(SimpleVS.hlsl VSMain vs_6_0 SimpleVS.dxil)
-    compile_shader(SimplePS.hlsl PSMain ps_6_0 SimplePS.dxil)
+    compile_shader(SimplePS.hlsl PSMain ps_6_0 SimplePS.dxil "${CMAKE_SOURCE_DIR}/assets/shaders/WarmFill.hlsli")
     compile_shader(OverlayVS.hlsl VSMain vs_6_0 OverlayVS.dxil)
     compile_shader(OverlayPS.hlsl PSMain ps_6_0 OverlayPS.dxil)
     if (NOT GAME_PROFILE STREQUAL "range")
@@ -333,8 +339,9 @@ if (DXC_EXE)
     # ステージL-03b: シャドウパス用（深度専用なので VS のみ。PS は無い）
     compile_shader(ShadowVS.hlsl VSMain vs_6_0 ShadowVS.dxil)
     # ステージL-02: PBR（Cook-Torrance + 法線マップ）
-    compile_shader(PbrVS.hlsl VSMain vs_6_0 PbrVS.dxil)
-    compile_shader(PbrPS.hlsl PSMain ps_6_0 PbrPS.dxil)
+    compile_shader(PbrVS.hlsl VSMain vs_6_0 PbrVS.dxil "${CMAKE_SOURCE_DIR}/assets/shaders/SunsetWaves.hlsli")
+    compile_shader(PbrPS.hlsl PSMain ps_6_0 PbrPS.dxil "${CMAKE_SOURCE_DIR}/assets/shaders/SunsetWaves.hlsli"
+                   "${CMAKE_SOURCE_DIR}/assets/shaders/WarmFill.hlsli")
     # ステージL-04b: GPU スキニング
     compile_shader(PbrSkinnedVS.hlsl VSMain vs_6_0 PbrSkinnedVS.dxil)
     compile_shader(ShadowSkinnedVS.hlsl VSMain vs_6_0 ShadowSkinnedVS.dxil)
@@ -360,7 +367,35 @@ if (DXC_EXE)
             ${SHADER_BIN_DIR}/ShadowSkinnedVS.dxil)
     endif()
     add_dependencies(game shaders)
+    if(BUILD_SUNSET_WALK)
+        add_executable(sunset_walk game/sunset/Main.cpp game/sunset/SunsetScene.cpp game/sunset/CoastalAudio.cpp
+                       game/GltfProp.cpp)
+        target_link_libraries(sunset_walk PRIVATE engine ole32)
+        set_target_properties(sunset_walk PROPERTIES OUTPUT_NAME SunsetWalk)
+        add_dependencies(sunset_walk shaders)
+        add_custom_command(TARGET sunset_walk POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${SHADER_BIN_DIR}" "$<TARGET_FILE_DIR:sunset_walk>/shaders")
+        add_executable(desert_road game/desert/Main.cpp game/desert/DesertScene.cpp game/GltfProp.cpp)
+        target_link_libraries(desert_road PRIVATE engine)
+        set_target_properties(desert_road PROPERTIES OUTPUT_NAME DesertRoad)
+        add_dependencies(desert_road shaders)
+        add_custom_command(TARGET desert_road POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${SHADER_BIN_DIR}" "$<TARGET_FILE_DIR:desert_road>/shaders")
+        add_executable(inland_tour game/inland/Main.cpp game/inland/InlandScene.cpp
+                       game/desert/DesertScene.cpp game/GltfProp.cpp)
+        target_link_libraries(inland_tour PRIVATE engine)
+        set_target_properties(inland_tour PROPERTIES OUTPUT_NAME InlandTour)
+        add_dependencies(inland_tour shaders)
+        add_custom_command(TARGET inland_tour POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${SHADER_BIN_DIR}" "$<TARGET_FILE_DIR:inland_tour>/shaders")
+    endif()
 else()
+    if(BUILD_SUNSET_WALK)
+        message(FATAL_ERROR "Sunset Harbor requires dxc")
+    endif()
     message(WARNING
         "dxc.exe が見つかりません。Windows SDK の bin/x64 を PATH に追加するか、"
         "手動で assets/shaders/*.hlsl を ${SHADER_BIN_DIR} にコンパイルしてください。")

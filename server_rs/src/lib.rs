@@ -294,6 +294,30 @@ mod tests {
             token: [0; 16],
         }
     }
+    fn assert_recipient_snapshots(game: &Game) {
+        for seat in 0..4 {
+            let mut changed = game.clone();
+            for other in 0..4 {
+                if other != seat {
+                    for card in &mut changed.hands[other] {
+                        *card = (*card + 1) % 53;
+                    }
+                }
+            }
+            let snapshot = game.snapshot(seat as u8, 0);
+            assert_eq!(snapshot, changed.snapshot(seat as u8, 0));
+            let own_end = 40 + game.hands[seat].len();
+            assert_eq!(&snapshot[40..own_end], game.hands[seat]);
+            assert!(snapshot[own_end..].iter().all(|&byte| byte == 0));
+            if let Some(first) = changed.hands[seat].first_mut() {
+                *first = (*first + 1) % 53;
+                let control = changed.snapshot(seat as u8, 0);
+                assert_eq!(&control[..40], &snapshot[..40]);
+                assert_ne!(control[40], snapshot[40]);
+                assert_eq!(&control[41..], &snapshot[41..]);
+            }
+        }
+    }
     #[test]
     fn wire_strict_bounds() {
         for n in 0..REQUEST_SIZE {
@@ -315,22 +339,46 @@ mod tests {
     }
     #[test]
     fn no_opponent_values_in_snapshot() {
-        let (g, _) = running();
+        let (game, _) = running();
+        assert_recipient_snapshots(&game);
+    }
+    #[test]
+    fn snapshots_preserve_the_recipient_boundary_through_a_match() {
+        let mut rng = TestRandom(112);
+        let mut game = Game::new(4);
+        assert_recipient_snapshots(&game);
         for seat in 0..4 {
-            let others: Vec<_> = (0..4).filter(|&s| s != seat).collect();
-            let mut other = g.clone();
-            // Change two private hands while holding public counts and recipient hand fixed.
-            let a = others[0] as usize;
-            let b = others[1] as usize;
-            let first = other.hands[a][0];
-            other.hands[a][0] = other.hands[b][0];
-            other.hands[b][0] = first;
-            assert_eq!(g.snapshot(seat, 0), other.snapshot(seat, 0));
-            assert_eq!(
-                &g.snapshot(seat, 0)[40..40 + g.hands[seat as usize].len()],
-                g.hands[seat as usize]
-            );
+            assert!(game.claim(seat, &mut rng).unwrap());
+            assert_recipient_snapshots(&game);
         }
+        game.release(2);
+        assert_eq!(game.phase(), 0);
+        assert_recipient_snapshots(&game);
+        assert!(game.claim(2, &mut rng).unwrap());
+        assert_eq!(game.phase(), 1);
+        assert_recipient_snapshots(&game);
+        for _ in 0..10_000 {
+            if game.phase() == 2 {
+                break;
+            }
+            let seat = game.turn;
+            let victim_count = game.hands[game.victim as usize].len();
+            let request = Request {
+                arg: rng.below(victim_count).unwrap() as u8,
+                ..draw(&game, seat)
+            };
+            assert_eq!(game.command(seat, &request, &mut rng).unwrap(), 0);
+            assert_recipient_snapshots(&game);
+        }
+        assert_eq!(game.phase(), 2);
+        assert_recipient_snapshots(&game);
+        let restart = Request {
+            kind: RESTART,
+            ..draw(&game, 0)
+        };
+        assert_eq!(game.command(0, &restart, &mut rng).unwrap(), 0);
+        assert_eq!(game.round, 2);
+        assert_recipient_snapshots(&game);
     }
     #[test]
     fn rejects_forgery_stale_and_duplicate_without_mutating_cards() {

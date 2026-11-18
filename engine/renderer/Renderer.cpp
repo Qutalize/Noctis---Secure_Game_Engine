@@ -1,6 +1,7 @@
 #include "engine/renderer/Renderer.h"
 #include "engine/core/EngineFeatures.h"
 
+#include <cstring>
 #include <fstream>
 #include <filesystem>
 #include <stdexcept>
@@ -76,11 +77,26 @@ void Renderer::Shutdown() {
     m_initialized = false;
 }
 
-bool Renderer::Initialize(HWND hwnd, int width, int height, bool basicOnly) {
+bool Renderer::Initialize(HWND hwnd, int width, int height, bool basicOnly, bool multisample) {
+    if (width <= 0 || height <= 0) throw std::invalid_argument("Invalid render dimensions");
     m_width  = width;
     m_height = height;
 
-    CreateDevice();
+    CreateDevice(hwnd == nullptr);
+    m_sampleCount = 1;
+    if (multisample) {
+        constexpr UINT samples = 4;
+        D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS color{
+            DXGI_FORMAT_R8G8B8A8_UNORM, samples, D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE, 0};
+        auto depth = color;
+        depth.Format = DXGI_FORMAT_D32_FLOAT;
+        if (SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &color, sizeof(color))) &&
+            SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &depth, sizeof(depth))) &&
+            color.NumQualityLevels > 0 && depth.NumQualityLevels > 0) {
+            m_sampleCount = samples;
+        }
+        LOG_INFO("Main pass sample count: %u", m_sampleCount);
+    }
 #if ENGINE_RAY_TRACING
     m_rayScene = std::make_unique<RayTracingScene>(m_device.Get());
 #endif
@@ -101,7 +117,7 @@ bool Renderer::Initialize(HWND hwnd, int width, int height, bool basicOnly) {
         DX_CHECK(HRESULT_FROM_WIN32(GetLastError()));
     }
 
-    CreateSwapChain(hwnd);
+    if (hwnd) CreateSwapChain(hwnd);
     CreateRenderTargets();
     CreateDepthBuffer();
     CreateRootSignature();
@@ -198,7 +214,7 @@ bool Renderer::Initialize(HWND hwnd, int width, int height, bool basicOnly) {
     return true;
 }
 
-void Renderer::CreateDevice() {
+void Renderer::CreateDevice(bool useWarp) {
     UINT factoryFlags = 0;
 
     // Debug ビルドでのみ検証レイヤーを有効化（CLAUDE.md 必須事項）
@@ -214,6 +230,13 @@ void Renderer::CreateDevice() {
 #endif
 
     DX_CHECK(CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(&m_factory)));
+    if (useWarp) {
+        ComPtr<IDXGIAdapter> warp;
+        DX_CHECK(m_factory->EnumWarpAdapter(IID_PPV_ARGS(&warp)));
+        DX_CHECK(D3D12CreateDevice(warp.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_device)));
+        LOG_INFO("D3D12 adapter: WARP (offscreen)");
+        return;
+    }
 
     // ハードウェアアダプタを選んでフィーチャーレベル 12.0 でデバイス作成
     ComPtr<IDXGIAdapter1> adapter;
@@ -283,10 +306,9 @@ void Renderer::CreateSwapChain(HWND hwnd) {
 }
 
 void Renderer::CreateRenderTargets() {
-    // RTV ヒープ: スワップチェーンのバッファ数ぶん。
-    // 根拠 = kFrameCount（バックバッファ 1 つにつき RTV 1 つ）
+    const UINT bufferCount = m_swapChain ? kFrameCount : 1;
     D3D12_DESCRIPTOR_HEAP_DESC rtvDesc = {};
-    rtvDesc.NumDescriptors = kFrameCount;
+    rtvDesc.NumDescriptors = bufferCount + (m_sampleCount > 1 ? 1 : 0);
     rtvDesc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     rtvDesc.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     DX_CHECK(m_device->CreateDescriptorHeap(&rtvDesc, IID_PPV_ARGS(&m_rtvHeap)));
@@ -295,10 +317,36 @@ void Renderer::CreateRenderTargets() {
 
     D3D12_CPU_DESCRIPTOR_HANDLE handle =
         m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
-    for (UINT i = 0; i < kFrameCount; ++i) {
-        DX_CHECK(m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_renderTargets[i])));
+    for (UINT i = 0; i < bufferCount; ++i) {
+        if (m_swapChain) {
+            DX_CHECK(m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_renderTargets[i])));
+        } else {
+            D3D12_RESOURCE_DESC target{};
+            target.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+            target.Width = static_cast<UINT>(m_width);
+            target.Height = static_cast<UINT>(m_height);
+            target.DepthOrArraySize = 1;
+            target.MipLevels = 1;
+            target.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            target.SampleDesc.Count = 1;
+            target.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+            const auto heap = HeapProps(D3D12_HEAP_TYPE_DEFAULT);
+            // COMMON and PRESENT are the same state. Both targets use BeginMainPass.
+            DX_CHECK(m_device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &target,
+                D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&m_renderTargets[i])));
+        }
         m_device->CreateRenderTargetView(m_renderTargets[i].Get(), nullptr, handle);
         handle.ptr += m_rtvDescriptorSize;
+    }
+    if (m_sampleCount > 1) {
+        auto target = m_renderTargets[0]->GetDesc();
+        target.SampleDesc = {m_sampleCount, 0};
+        target.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        const auto hp = HeapProps(D3D12_HEAP_TYPE_DEFAULT);
+        DX_CHECK(m_device->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &target,
+            D3D12_RESOURCE_STATE_RESOLVE_SOURCE, nullptr, IID_PPV_ARGS(&m_multisampleTarget)));
+        m_multisampleRtv = handle;
+        m_device->CreateRenderTargetView(m_multisampleTarget.Get(), nullptr, m_multisampleRtv);
     }
 }
 
@@ -319,7 +367,7 @@ void Renderer::CreateDepthBuffer() {
     depthDesc.DepthOrArraySize = 1;
     depthDesc.MipLevels        = 1;
     depthDesc.Format           = DXGI_FORMAT_D32_FLOAT;
-    depthDesc.SampleDesc.Count = 1;
+    depthDesc.SampleDesc.Count = m_sampleCount;
     depthDesc.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     depthDesc.Flags            = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
@@ -336,7 +384,7 @@ void Renderer::CreateDepthBuffer() {
 
     D3D12_DEPTH_STENCIL_VIEW_DESC dsv = {};
     dsv.Format        = DXGI_FORMAT_D32_FLOAT;
-    dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+    dsv.ViewDimension = m_sampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMS : D3D12_DSV_DIMENSION_TEXTURE2D;
     dsv.Flags         = D3D12_DSV_FLAG_NONE;
     m_device->CreateDepthStencilView(
         m_depthBuffer.Get(), &dsv,
@@ -455,7 +503,8 @@ void Renderer::CreatePipelineState() {
     pso.NumRenderTargets      = 1;
     pso.RTVFormats[0]         = DXGI_FORMAT_R8G8B8A8_UNORM;
     pso.DSVFormat             = DXGI_FORMAT_D32_FLOAT;
-    pso.SampleDesc.Count      = 1;
+    pso.SampleDesc.Count      = m_sampleCount;
+    pso.RasterizerState.MultisampleEnable = m_sampleCount > 1;
     pso.SampleMask            = UINT_MAX;
 
     // ラスタライザー: カリングなし（両面描画）
@@ -998,7 +1047,8 @@ void Renderer::CreateTexturePipelineState() {
     pso.NumRenderTargets      = 1;
     pso.RTVFormats[0]         = DXGI_FORMAT_R8G8B8A8_UNORM;
     pso.DSVFormat             = DXGI_FORMAT_D32_FLOAT;
-    pso.SampleDesc.Count      = 1;
+    pso.SampleDesc.Count      = m_sampleCount;
+    pso.RasterizerState.MultisampleEnable = m_sampleCount > 1;
     pso.SampleMask            = UINT_MAX;
 
     pso.RasterizerState.FillMode              = D3D12_FILL_MODE_SOLID;
@@ -1280,11 +1330,11 @@ void Renderer::DrawOverlay(const Mesh& mesh) {
                DepthMode::Disabled, nullptr, /*isEnemy=*/false);
 }
 
-void Renderer::BeginFrame(const Camera& camera) {
+void Renderer::BeginFrame(const Camera& camera, float verticalFovDegrees, float farDistance) {
     // 行列を確定（DrawMesh で使う）
     const float aspect = static_cast<float>(m_width) / static_cast<float>(m_height);
     m_viewMatrix = camera.GetViewMatrix();
-    m_projMatrix = camera.GetProjMatrix(XMConvertToRadians(70.0f), aspect, 0.1f, 500.0f);
+    m_projMatrix = camera.GetProjMatrix(XMConvertToRadians(verticalFovDegrees), aspect, 0.1f, farDistance);
     m_cameraPos  = camera.GetPosition(); // スペキュラ計算用に視点位置を保持
 
     // J-04: フレーム鍵を更新（xorshift32）。非0 を保証して「マスク==素の値」を避ける。
@@ -1586,7 +1636,8 @@ void Renderer::CreatePbrPipelineState() {
     pso.NumRenderTargets      = 1;
     pso.RTVFormats[0]         = DXGI_FORMAT_R8G8B8A8_UNORM;
     pso.DSVFormat             = DXGI_FORMAT_D32_FLOAT;
-    pso.SampleDesc.Count      = 1;
+    pso.SampleDesc.Count      = m_sampleCount;
+    pso.RasterizerState.MultisampleEnable = m_sampleCount > 1;
     pso.SampleMask            = UINT_MAX;
 
     pso.RasterizerState.FillMode        = D3D12_FILL_MODE_SOLID;
@@ -1901,7 +1952,8 @@ void Renderer::CreateSkinnedPipelineState() {
     pso.NumRenderTargets      = 1;
     pso.RTVFormats[0]         = DXGI_FORMAT_R8G8B8A8_UNORM;
     pso.DSVFormat             = DXGI_FORMAT_D32_FLOAT;
-    pso.SampleDesc.Count      = 1;
+    pso.SampleDesc.Count      = m_sampleCount;
+    pso.RasterizerState.MultisampleEnable = m_sampleCount > 1;
     pso.SampleMask            = UINT_MAX;
 
     pso.RasterizerState.FillMode        = D3D12_FILL_MODE_SOLID;
@@ -2124,6 +2176,11 @@ void Renderer::RenderShadowPass() {
         if (rec.material == MaterialType::Overlay) continue;
         if (rec.depth    == DepthMode::Disabled)   continue;
         if (rec.mesh == nullptr) continue;
+        if (rec.pbr) {
+            const float mode = rec.pbr->coastalParams.x;
+            // The depth-only shader would turn cutout grass and needles into rectangular shadows.
+            if (mode > .5f || mode == -3.f || mode == -5.f) continue;
+        }
 
         const bool isSkinned = (rec.material == MaterialType::PbrSkinned);
         if (isSkinned && (!m_shadowSkinnedPSO || rec.skinPaletteAddr == 0)) {
@@ -2184,13 +2241,17 @@ void Renderer::BeginMainPass() {
     m_commandList->RSSetViewports(1, &vp);
     m_commandList->RSSetScissorRects(1, &scissor);
 
-    // バックバッファを PRESENT → RENDER_TARGET に遷移
-    Transition(m_commandList.Get(), m_renderTargets[m_frameIndex].Get(),
-               D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
     D3D12_CPU_DESCRIPTOR_HANDLE rtv =
         m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
     rtv.ptr += static_cast<SIZE_T>(m_frameIndex) * m_rtvDescriptorSize;
+    if (m_multisampleTarget) {
+        Transition(m_commandList.Get(), m_multisampleTarget.Get(),
+                   D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        rtv = m_multisampleRtv;
+    } else {
+        Transition(m_commandList.Get(), m_renderTargets[m_frameIndex].Get(),
+                   D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    }
     D3D12_CPU_DESCRIPTOR_HANDLE dsv =
         m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
 
@@ -2285,7 +2346,7 @@ void Renderer::EmitDraw(const DrawRecord& rec) {
 void Renderer::WriteCbAndDraw(const Mesh& mesh, const XMMATRIX& world,
                               const Texture* texture, const PbrMaterial* pbr) {
     // 定数バッファへ書き込み（HLSL は column-major なので転置してアップロード）
-    SceneConstants cb;
+    SceneConstants cb{};
     XMStoreFloat4x4(&cb.view,  XMMatrixTranspose(m_viewMatrix));
     XMStoreFloat4x4(&cb.proj,  XMMatrixTranspose(m_projMatrix));
     XMStoreFloat4x4(&cb.world, XMMatrixTranspose(world));
@@ -2297,6 +2358,12 @@ void Renderer::WriteCbAndDraw(const Mesh& mesh, const XMMATRIX& world,
     cb.lightDir   = normalizedDir;
     cb.lightColor = m_lightColor;
     cb.ambient    = m_ambient;
+    cb.fillLight  = m_fillLight;
+    cb.accentLight = m_accentLight;
+    cb.rearLight = m_rearLight;
+    cb.coastalHaze = m_coastalHaze;
+    cb.scenicWeather = m_scenicWeather;
+    cb.scenicWake = m_scenicWake;
     // cameraPos.w にフォグ有効フラグ（1=フォグ / 0=フォグ無し）を載せる（PS が距離減衰に使う）。
     cb.cameraPos  = XMFLOAT4{ m_cameraPos.x, m_cameraPos.y, m_cameraPos.z,
                               m_fogEnabled ? 1.0f : 0.0f };
@@ -2321,7 +2388,8 @@ void Renderer::WriteCbAndDraw(const Mesh& mesh, const XMMATRIX& world,
         cb.baseColorFactor = pbr->baseColorFactor;
         cb.materialParams  = XMFLOAT4{ pbr->metallicFactor, pbr->roughnessFactor,
                                        pbr->normalScale,
-                                       pbr->hasTextures ? 1.0f : 0.0f };
+                                       pbr->hasTextures ? (pbr->baseColorSrgb ? 2.0f : 1.0f) : 0.0f };
+        cb.coastalParams = pbr->coastalParams;
     } else {
         cb.baseColorFactor = XMFLOAT4{ 1.0f, 1.0f, 1.0f, 1.0f };
         cb.materialParams  = XMFLOAT4{ 0.0f, 1.0f, 1.0f, 0.0f };
@@ -2370,16 +2438,72 @@ void Renderer::EndFrame() {
     BeginMainPass();
     ReplayDrawList();
 
-    // RENDER_TARGET → PRESENT に戻す
-    Transition(m_commandList.Get(), m_renderTargets[m_frameIndex].Get(),
-               D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    auto* target = m_renderTargets[m_frameIndex].Get();
+    if (m_multisampleTarget) {
+        Transition(m_commandList.Get(), m_multisampleTarget.Get(),
+                   D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+        Transition(m_commandList.Get(), target, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RESOLVE_DEST);
+        m_commandList->ResolveSubresource(target, 0, m_multisampleTarget.Get(), 0, DXGI_FORMAT_R8G8B8A8_UNORM);
+        Transition(m_commandList.Get(), target, D3D12_RESOURCE_STATE_RESOLVE_DEST, D3D12_RESOURCE_STATE_PRESENT);
+    } else {
+        Transition(m_commandList.Get(), target, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    }
 
     DX_CHECK(m_commandList->Close());
     ID3D12CommandList* lists[] = { m_commandList.Get() };
     m_commandQueue->ExecuteCommandLists(1, lists);
 
-    DX_CHECK(m_swapChain->Present(1, 0)); // VSync あり
-    MoveToNextFrame();
+    if (m_swapChain) {
+        DX_CHECK(m_swapChain->Present(1, 0)); // VSync あり
+        MoveToNextFrame();
+    } else {
+        WaitForGpu();
+    }
+}
+
+std::vector<uint8_t> Renderer::ReadOffscreenRgba() {
+    if (!m_initialized || m_swapChain) throw std::logic_error("Offscreen renderer required");
+    const auto& target = m_renderTargets[m_frameIndex];
+    const auto targetDesc = target->GetDesc();
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
+    UINT64 totalBytes = 0;
+    m_device->GetCopyableFootprints(&targetDesc, 0, 1, 0, &footprint, nullptr, nullptr, &totalBytes);
+
+    const auto heap = HeapProps(D3D12_HEAP_TYPE_READBACK);
+    const auto buffer = BufferDesc(totalBytes);
+    ComPtr<ID3D12Resource> readback;
+    DX_CHECK(m_device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buffer,
+        D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&readback)));
+
+    DX_CHECK(m_commandAllocators[m_frameIndex]->Reset());
+    DX_CHECK(m_commandList->Reset(m_commandAllocators[m_frameIndex].Get(), nullptr));
+    Transition(m_commandList.Get(), target.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    D3D12_TEXTURE_COPY_LOCATION source{};
+    source.pResource = target.Get();
+    source.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    D3D12_TEXTURE_COPY_LOCATION destination{};
+    destination.pResource = readback.Get();
+    destination.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    destination.PlacedFootprint = footprint;
+    m_commandList->CopyTextureRegion(&destination, 0, 0, 0, &source, nullptr);
+    Transition(m_commandList.Get(), target.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COMMON);
+    DX_CHECK(m_commandList->Close());
+    ID3D12CommandList* lists[] = {m_commandList.Get()};
+    m_commandQueue->ExecuteCommandLists(1, lists);
+    WaitForGpu();
+
+    const auto rowBytes = static_cast<std::size_t>(m_width) * 4;
+    std::vector<uint8_t> rgba(rowBytes * m_height);
+    const D3D12_RANGE readRange{0, static_cast<SIZE_T>(totalBytes)};
+    void* mapped = nullptr;
+    DX_CHECK(readback->Map(0, &readRange, &mapped));
+    const auto* rows = static_cast<const uint8_t*>(mapped) + footprint.Offset;
+    for (int y = 0; y < m_height; ++y) {
+        std::memcpy(rgba.data() + y * rowBytes, rows + y * footprint.Footprint.RowPitch, rowBytes);
+    }
+    const D3D12_RANGE noWrites{0, 0};
+    readback->Unmap(0, &noWrites);
+    return rgba;
 }
 
 void Renderer::SetDirectionalLight(const XMFLOAT3& dir, const XMFLOAT3& color,
