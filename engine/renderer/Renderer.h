@@ -123,6 +123,7 @@ struct alignas(256) SceneConstants {
     DirectX::XMFLOAT4   fillLight;        // xyz=位置, w=強度
     DirectX::XMFLOAT4   accentLight;
     DirectX::XMFLOAT4   rearLight;
+    DirectX::XMFLOAT4   coastalHaze;
 };
 static_assert(sizeof(SceneConstants) == 512);
 
@@ -368,6 +369,9 @@ public:
     void SetWarmAccentLights(const DirectX::XMFLOAT4& accent, const DirectX::XMFLOAT4& rear) {
         m_accentLight = accent;
         m_rearLight = rear;
+    }
+    void SetCoastalHaze(const DirectX::XMFLOAT3& color, float density) {
+        m_coastalHaze = {color.x, color.y, color.z, density};
     }
 
     // 画面の横/縦比（2D オーバーレイのアスペクト補正に使う）。
@@ -695,6 +699,7 @@ private:
     DirectX::XMFLOAT4 m_fillLight{};
     DirectX::XMFLOAT4 m_accentLight{};
     DirectX::XMFLOAT4 m_rearLight{};
+    DirectX::XMFLOAT4 m_coastalHaze{};
     DirectX::XMFLOAT3 m_cameraPos{ 0.0f, 0.0f, 0.0f };          // BeginFrame で更新
 
     bool m_initialized = false;

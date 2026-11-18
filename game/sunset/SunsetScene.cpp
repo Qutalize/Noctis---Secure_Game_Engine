@@ -334,21 +334,6 @@ XMFLOAT3 BeachVertex(float x, float distance) {
 
 Mesh Shore(Renderer& renderer) {
     ColoredMesh mesh;
-    for (int segment = -55; segment < 55; ++segment) {
-        for (int band = 0; band < 18; ++band) {
-            const float distance = -.72f + band * 1.35f;
-            const float texture = CloudNoise(segment * .59f, band * .83f);
-            const float greens = (std::clamp((distance - 3.f) * .22f + .35f * texture, 0.f, 1.f)) *
-                std::clamp((std::abs(static_cast<float>(segment)) - 3.f) * .31f, 0.f, 1.f);
-            const float wet = std::clamp((distance + .7f) * .65f, 0.f, 1.f);
-            const XMFLOAT4 color{Mix(Mix(.45f, .82f, wet), .27f + .13f * texture, greens),
-                                 Mix(Mix(.37f, .72f, wet), .36f + .16f * texture, greens),
-                                 Mix(Mix(.28f, .52f, wet), .18f + .05f * texture, greens), 1.f};
-            mesh.Face({BeachVertex(static_cast<float>(segment), distance + 1.35f),
-                       BeachVertex(segment + 1.f, distance + 1.35f), BeachVertex(segment + 1.f, distance),
-                       BeachVertex(static_cast<float>(segment), distance)}, color);
-        }
-    }
     for (int tree = 0; tree < 16; ++tree) {
         const float x = (tree < 8 ? -1.f : 1.f) * (4.55f + (tree % 8) * 2.06f);
         const float inland = 3.9f + 5.2f * CloudNoise(tree * .82f, 1.36f);
@@ -399,22 +384,17 @@ Texture LoadCoastalMap(Renderer& renderer, const std::filesystem::path& path) {
 
 Mesh Foreshore(Renderer& renderer) {
     MeshData mesh;
-    for (int strip = -42; strip < 42; ++strip) {
+    for (int strip = -55; strip < 55; ++strip) {
         const float left = static_cast<float>(strip);
         const float right = left + 1.f;
-        const float backLeft = 3.4f + 2.4f * CloudNoise(left * .24f, 1.7f);
-        const float backRight = 3.4f + 2.4f * CloudNoise(right * .24f, 1.7f);
-        for (int band = 0; band < 6; ++band) {
-            const float seaward = std::lerp(-.78f, backLeft, band / 6.f);
-            const float inland = std::lerp(-.78f, backLeft, (band + 1) / 6.f);
-            const float nearRight = std::lerp(-.78f, backRight, band / 6.f);
-            const float farRight = std::lerp(-.78f, backRight, (band + 1) / 6.f);
-            mesh.Quad({{BeachVertex(left, inland), BeachVertex(right, farRight),
-                        BeachVertex(right, nearRight), BeachVertex(left, seaward)}});
+        for (int band = 0; band < 22; ++band) {
+            const float seaward = -.78f + 1.35f * band;
+            const float inland = seaward + 1.35f;
+            mesh.Quad({{BeachVertex(left, inland), BeachVertex(right, inland),
+                        BeachVertex(right, seaward), BeachVertex(left, seaward)}});
         }
     }
     for (auto& vertex : mesh.vertices) {
-        vertex.position.y += .033f;
         vertex.uv = {vertex.position.x / 3.2f, vertex.position.z / 3.2f};
     }
     return renderer.CreatePbrMesh(mesh.vertices, mesh.indices);
@@ -483,8 +463,11 @@ Mesh Lanterns(Renderer& renderer) {
             StoneBox(mesh, side * 3.46f - .055f, 2.999f, z - .055f, .11f, .12f, .11f);
         }
     }
-    for (const float z : {4.6f, 5.78f, 6.96f}) {
-        StoneBox(mesh, 7.34f, .49f, z, .018f, 1.65f, .71f);
+    for (const float center : {4.74f, 6.09f, 7.44f}) {
+        for (const float offset : {-.39f, .063f}) {
+            const float bottom = center > 5.f && center < 7.f ? .51f : .89f;
+            StoneBox(mesh, 7.473f, bottom, center + offset, .013f, 2.1f - bottom, .31f);
+        }
     }
     return renderer.CreatePbrMesh(mesh.vertices, mesh.indices);
 }
@@ -513,24 +496,9 @@ Mesh Resort(Renderer& renderer) {
         }
     }
     const XMFLOAT4 terracotta{.60f, .25f, .13f, 1.f};
-    const XMFLOAT4 trunk{.32f, .25f, .16f, 1.f};
-    const XMFLOAT4 leaf{.19f, .35f, .24f, 1.f};
     for (const XMFLOAT2 base : {XMFLOAT2{10.85f, -2.75f}, XMFLOAT2{11.08f, .81f}, XMFLOAT2{6.59f, 7.90f}}) {
         data.Box(base.x - .38f, 0.f, base.y - .38f, .76f, .36f, .76f, terracotta);
-        data.Box(base.x - .09f, .34f, base.y - .09f, .18f, 2.42f, .18f, trunk);
-        for (int branch = 0; branch < 9; ++branch) {
-            const float angle = 2.f * kPi * branch / 9.f + base.y;
-            const float side = std::cos(angle), forward = std::sin(angle);
-            const XMFLOAT3 origin{base.x, 2.70f, base.y};
-            const XMFLOAT3 mid{base.x + .69f * side, 3.25f, base.y + .69f * forward};
-            const XMFLOAT3 tip{base.x + 1.56f * side, 2.59f, base.y + 1.56f * forward};
-            const XMFLOAT3 right{mid.x + .15f * forward, mid.y - .07f, mid.z - .15f * side};
-            const XMFLOAT3 left{mid.x - .15f * forward, mid.y - .07f, mid.z + .15f * side};
-            data.Face({origin, right, mid}, leaf);
-            data.Face({mid, right, tip}, leaf);
-            data.Face({origin, mid, left}, leaf);
-            data.Face({left, mid, tip}, leaf);
-        }
+        Palm(data, base.x, .34f, base.y, 1.02f, base.y);
     }
     return data.Upload(renderer);
 }
@@ -590,6 +558,7 @@ Scene::Scene(Renderer& renderer) {
     const auto sandOrm = LoadCoastalMap(renderer, sand / "arm.png");
     m_sandMaterial = renderer.CreatePbrMaterial(&sandColor, &sandNormal, &sandOrm);
     m_sandMaterial.baseColorSrgb = true;
+    m_sandMaterial.coastalParams.x = -1.f;
     m_sandMaterial.baseColorFactor = {1.f, .97f, .89f, 1.f};
     m_sandMaterial.normalScale = .58f;
     m_sandMaterial.metallicFactor = 0.f;
@@ -639,6 +608,8 @@ void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float 
     const XMFLOAT3 sun{std::sin(azimuth) * std::cos(elevation), std::sin(elevation),
                        std::cos(azimuth) * std::cos(elevation)};
     renderer.SetFog(false);
+    renderer.SetCoastalHaze({Mix(.54f, .29f, dusk), Mix(.67f, .34f, dusk), Mix(.74f, .46f, dusk)},
+                            Mix(.00275f, .0011f, dusk));
     renderer.SetDirectionalLight({-sun.x, -sun.y, -sun.z},
                                  {1.f, Mix(.93f, .64f, sunset), Mix(.86f, .36f, sunset)},
                                  Mix(1.07f, .03f, dusk),

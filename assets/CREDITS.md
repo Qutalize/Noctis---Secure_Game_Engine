@@ -17,7 +17,7 @@
 | `coastal-assets/rock_face_01` | 岩壁モデル・PBR材質 | [Rock Face 01・Dario Barresi](https://polyhaven.com/a/rock_face_01) | CC0 |
 | `coastal-assets/outdoor_table_chair_set_01` | 木製テーブルと椅子・PBR材質 | [Outdoor Table Chair Set 01・James Ray Cock](https://polyhaven.com/a/outdoor_table_chair_set_01) | CC0 |
 | `coastal-assets/lantern_chandelier_01` | 吊り灯り・PBR材質 | [Lantern Chandelier 01・Kirill Sannikov](https://polyhaven.com/a/lantern_chandelier_01) | CC0 |
-| `coastal-assets/wood_planks_grey` | 桟橋の板材・PBR材質 | [Wood Planks Grey](https://polyhaven.com/a/wood_planks_grey) | CC0 |
+| `coastal-assets/wood_planks_grey` | 桟橋の板材・PBR材質 | [Wood Planks Grey・Rob Tuytel](https://polyhaven.com/a/wood_planks_grey) | CC0 |
 | `coastal-assets/large_sandstone_blocks_01` | 遺跡と建築の砂岩・PBR材質 | [Large Sandstone Blocks 01・Rob Tuytel](https://polyhaven.com/a/large_sandstone_blocks_01) | CC0 |
 | `coastal-assets/roof_09` | ヴィラの瓦屋根・PBR材質 | [Roof 09・Rob Tuytel](https://polyhaven.com/a/roof_09) | CC0 |
 | `coastal-assets/coast_sand_01` | 浜・砂底・ヴィラ外壁の粒状材質 | [Coast Sand 01・Rob Tuytel](https://polyhaven.com/a/coast_sand_01) | CC0 |

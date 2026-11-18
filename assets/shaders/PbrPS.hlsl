@@ -34,6 +34,7 @@ cbuffer SceneConstants : register(b0)
     float4 gFillLight;
     float4 gAccentLight;
     float4 gRearLight;
+    float4 gCoastalHaze;
 };
 
 #include "SunsetWaves.hlsli"
@@ -185,6 +186,15 @@ float4 PSMain(PSInput input) : SV_Target
 
     if (hasTextures) {
         float4 baseSample = gBaseColorMap.Sample(gSampler, input.uv);
+        if (gCoastalParams.x < -.5f) {
+            float inland = Shoreline(input.worldPos.x) - input.worldPos.z;
+            float vegetation = CoastalNoise(input.worldPos.xz * .39f) * .7f +
+                CoastalNoise(input.worldPos.xz * 1.37f) * .3f;
+            float greenery = smoothstep(3.f, 12.f, inland + 4.f * vegetation) *
+                smoothstep(3.6f, 7.7f, abs(input.worldPos.x));
+            baseSample.rgb = lerp(baseSample.rgb * lerp(.92f, 1.36f, smoothstep(-.6f, 1.4f, inland)),
+                baseSample.rgb * float3(.64f, .84f, .47f), greenery * .82f);
+        }
         if (gMaterialParams.w > 1.5f) {
             baseSample.rgb = lerp(baseSample.rgb / 12.92f,
                 pow((baseSample.rgb + .055f) / 1.055f, 2.4f), step(.04045f, baseSample.rgb));
@@ -271,5 +281,6 @@ float4 PSMain(PSInput input) : SV_Target
     color = color / (color + 1.0f);
     color = pow(color, 1.0f / 2.2f);   // ガンマ補正（sRGB 相当）
 
-    return float4(color, albedo.a);
+    const float haze = 1.f - exp(-max(0.f, dist - 24.f) * gCoastalHaze.w);
+    return float4(lerp(color, gCoastalHaze.rgb, haze), albedo.a);
 }

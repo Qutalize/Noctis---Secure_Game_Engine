@@ -24,6 +24,7 @@ cbuffer SceneConstants : register(b0)
     float4   gFillLight;
     float4   gAccentLight;
     float4   gRearLight;
+    float4   gCoastalHaze;
 };
 
 // ステージL-03b: シャドウマップ（ライト視点の深度）と比較サンプラー。
@@ -121,5 +122,6 @@ float4 PSMain(PSInput input) : SV_Target
     float fog  = saturate((dist - fogStart) / (fogEnd - fogStart)) * gCameraPos.w;
     color = lerp(color, fogColor, fog);
 
-    return float4(color, input.color.a);
+    const float haze = 1.f - exp(-max(0.f, dist - 24.f) * gCoastalHaze.w);
+    return float4(lerp(color, gCoastalHaze.rgb, haze), input.color.a);
 }
