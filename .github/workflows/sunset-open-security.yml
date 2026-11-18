@@ -54,6 +54,16 @@ jobs:
           & build-ci/Release/SunsetWalk.exe --compare-aa comparison-ssaa
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -B tools/sunset/compare_revisions.py comparison-before comparison-after comparison-ssaa sunset-evidence
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coastal-reference-frames
+          path: |
+            sunset-evidence/*-before.png
+            sunset-evidence/*-after.png
+            sunset-evidence/*-after-aa.png
+            sunset-evidence/revision-comparison.json
+          if-no-files-found: error
+          retention-days: 2
       - name: Render the trailer and verify the MP4
         run: |
           & build-ci/Release/SunsetWalk.exe --pv-frames pv-frames
@@ -74,6 +84,7 @@ jobs:
             build-ci/Release/SunsetWalk.exe
             build-ci/Release/shaders/*.dxil
             build-ci/Release/coastal-assets/**
+            assets/CREDITS.md
           if-no-files-found: error
           retention-days: 5
 

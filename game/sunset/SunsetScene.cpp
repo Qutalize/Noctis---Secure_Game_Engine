@@ -70,14 +70,14 @@ Mesh Islands(Renderer& renderer) {
     for (int layer = 0; layer < 2; ++layer) {
         constexpr int samples = 100;
         const auto start = static_cast<uint32_t>(vertices.size());
-        const XMFLOAT4 color = layer == 0 ? XMFLOAT4{.48f, .34f, .41f, 1.f}
-                                          : XMFLOAT4{.34f, .25f, .33f, 1.f};
+        const XMFLOAT4 color = layer == 0 ? XMFLOAT4{.44f, .47f, .54f, 1.f}
+                                          : XMFLOAT4{.39f, .43f, .50f, 1.f};
         for (int i = 0; i <= samples; ++i) {
             const float x = Mix(-120.f, 120.f, static_cast<float>(i) / samples);
             const float envelope = std::exp(-std::pow((x + 47.f - layer * 10.f) / 29.f, 2.f)) +
                                    .5f * std::exp(-std::pow((x - 83.f) / 14.f, 2.f));
             const float top = envelope * (2.2f + 6.f * Pattern(x * .013f, layer * .3f)) - 1.4f;
-            const float z = 116.f - layer * 19.f;
+            const float z = 235.f - layer * 24.f;
             vertices.push_back({{x, -2.f, z}, {0, 1, 0}, color});
             vertices.push_back({{x, top, z}, {0, 1, 0}, color});
             if (i < samples) {
@@ -467,15 +467,15 @@ Mesh Boardwalk(Renderer& renderer) {
     constexpr XMFLOAT4 post{.24f, .17f, .11f, 1.f};
     for (int plank = 0; plank < 159; ++plank) {
         const float z = -13.f + plank * .255f;
-        if (z >= -1.25f && z < 16.f) continue;
+        if ((z >= -1.25f && z < 16.f) || z >= 18.6f) continue;
         const float wear = .76f + .33f * CloudNoise(plank * .73f, .77f);
         mesh.Box(-2.82f, -.11f, z, 5.63f, .145f, .242f, {teak.x * wear, teak.y * wear, teak.z * wear, 1.f});
     }
-    for (int pierPost = 0; pierPost < 18; ++pierPost) {
+    for (int pierPost = 0; pierPost < 14; ++pierPost) {
         const float z = -12.1f + pierPost * 2.23f;
         for (const float x : {-2.78f, 2.62f}) {
             mesh.Box(x, -1.54f, z, .17f, 2.43f, .19f, post);
-            if (pierPost < 17) {
+            if (pierPost < 13) {
                 mesh.Box(x + .037f, .58f, z + .12f, .095f, .075f, 2.16f, teak);
             }
         }
@@ -509,7 +509,12 @@ Mesh Restaurant(Renderer& renderer) {
         mesh.Box(-6.06f, -.18f, 18.6f + board * .27f, 12.11f, .22f, .258f, beam);
     }
     for (const float x : {-5.6f, 5.38f}) {
-        for (const float z : {18.9f, 22.9f, 27.6f}) mesh.Box(x, -2.1f, z, .24f, 5.43f, .24f, beam);
+        const float eave = 3.13f + .025f * std::abs(x);
+        const float ridge = 5.05f + .033f * x;
+        for (const float z : {18.9f, 22.9f, 27.6f}) {
+            const float roof = Mix(ridge, eave, std::abs(z - 24.4f) / (z < 24.4f ? 6.1f : 5.6f));
+            mesh.Box(x, -2.1f, z, .24f, roof + 2.1f, .24f, beam);
+        }
     }
     for (int panel = 0; panel < 24; ++panel) {
         const float x = -6.56f + panel * .55f;
@@ -523,9 +528,10 @@ Mesh Restaurant(Renderer& renderer) {
         mesh.Face({{x,eave,18.3f},{next,nextEave,18.3f},{next,nextRidge,24.4f},{x,ridge,24.4f}}, roof);
         mesh.Face({{x,ridge,24.4f},{next,nextRidge,24.4f},{next,nextEave,30.0f},{x,eave,30.0f}}, roof);
         mesh.Face({{x,ridge - .07f,24.4f},{next,nextRidge - .07f,24.4f},{next,nextEave - .08f,18.3f},{x,eave - .08f,18.3f}}, beam);
+        mesh.Face({{x,eave - .08f,30.f},{next,nextEave - .08f,30.f},{next,nextRidge - .07f,24.4f},{x,ridge - .07f,24.4f}}, beam);
     }
-    for (float z : {19.1f, 21.7f, 24.3f, 26.9f, 29.4f}) {
-        mesh.Box(-5.73f, 3.06f, z, 11.46f, .17f, .13f, beam);
+    for (float z : {21.9f, 24.8f, 27.25f}) {
+        mesh.Box(-5.73f, 3.52f, z - .095f, 11.46f, .23f, .19f, beam);
     }
     mesh.Box(-2.45f, .03f, 28.38f, 4.90f, .95f, .93f, beam);
     mesh.Box(-2.62f, .98f, 28.29f, 5.24f, .10f, 1.12f, canvas);
@@ -714,9 +720,9 @@ void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float 
     renderer.DrawMesh(m_ruins, identity);
     for (const auto& [x, y, z, scale, rotation] : {
              std::array{-41.f, -2.3f, 124.f, 3.25f, .32f},
-             std::array{-28.8f, -2.7f, 119.7f, 3.9f, -.12f},
-             std::array{-15.94f, -2.4f, 123.f, 2.85f, -.58f},
-             std::array{-52.4f, -1.34f, 130.2f, 2.2f, .86f}}) {
+             std::array{-29.6f, -2.9f, 119.7f, 3.55f, -.12f},
+             std::array{-18.2f, -2.95f, 123.f, 3.15f, -.46f},
+             std::array{-49.7f, -2.25f, 129.2f, 3.0f, .86f}}) {
         m_rock.Draw(renderer, XMMatrixScaling(scale, scale, scale) * XMMatrixRotationY(rotation) *
                              XMMatrixTranslation(x, y, z));
     }

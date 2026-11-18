@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <windows.h>
 #include <string>
 
 #include "engine/core/Json.h"
@@ -18,7 +19,14 @@ namespace {
 // ---------------------------------------------------------------------------
 bool ReadWholeFile(const std::string& path, std::vector<uint8_t>& out) {
     FILE* fp = nullptr;
-    if (fopen_s(&fp, path.c_str(), "rb") != 0 || fp == nullptr) return false;
+    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path.c_str(), -1, nullptr, 0);
+    if (required > 0) {
+        std::wstring wide(static_cast<std::size_t>(required), L'\0');
+        if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path.c_str(), -1, wide.data(), required) == required) {
+            _wfopen_s(&fp, wide.c_str(), L"rb");
+        }
+    }
+    if (fp == nullptr && (fopen_s(&fp, path.c_str(), "rb") != 0 || fp == nullptr)) return false;
     fseek(fp, 0, SEEK_END);
     const long size = ftell(fp);
     fseek(fp, 0, SEEK_SET);

@@ -43,7 +43,7 @@ float3 CoastalBottom(float2 seaPosition, float depth, float3 view, float2 slope,
     float3 bed = lerp(float3(.54f, .47f, .30f), float3(.85f, .75f, .54f), sand);
     float3 transport = exp(-path * float3(.98f, .30f, .19f));
     float3 scatter = float3(.071f, .39f, .46f) * daylight;
-    return bed * (daylight + .25f * caustic * daylight) * transport + scatter * (1.f - transport);
+    return bed * (daylight + .18f * caustic * daylight) * transport + scatter * (1.f - transport);
 }
 
 float WaveSurface(float2 seaPosition, float time)
