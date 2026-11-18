@@ -53,11 +53,11 @@ VSOutput VSMain(VSInput input)
         wp.y += WaveSurface(wp.xz, gCoastalParams.y);
     }
     if (gCoastalParams.x == -3.f) {
-        // The authored blade UV gives the tip more travel than the anchored root.
+        // Wind adds a small movement to the scanned grass clusters.
         float phase = dot(wp.xz, float2(.58f, .29f)) - gCoastalParams.y * 2.1f;
         float gust = CoastalNoise(wp.xz * .13f - gCoastalParams.y * float2(.16f, .07f));
         float tip = 1.f - input.uv.y;
-        wp.xz += float2(1.f, .38f) * tip * tip * (.019f + .071f * gust) * sin(phase);
+        wp.xz += float2(1.f, .38f) * tip * tip * (.007f + .027f * gust) * sin(phase);
     }
     o.worldPos = wp.xyz;
     o.position = mul(mul(wp, gView), gProj);

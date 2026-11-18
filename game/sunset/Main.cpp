@@ -183,6 +183,12 @@ void SelfTest() {
     dining.center = {0.f, .85f, 14.f};
     for (int step = 0; step < 260; ++step) dining.Move(0.f, 1.f, 1.f / 60.f);
     if (dining.center.z < 24.7f) throw std::runtime_error("Restaurant route failed");
+    Walk promenade;
+    promenade.center = {0.f, .85f, -11.5f};
+    for (int step = 0; step < 700; ++step) promenade.Move(1.f, 0.f, 1.f / 60.f);
+    if (promenade.center.x < 25.64f || promenade.center.x > 25.7f) {
+        throw std::runtime_error("Seafront promenade boundary failed");
+    }
     auto previous = PvCamera(0.f);
     for (int frame = 1; frame <= kPvSeconds * kPvFps; ++frame) {
         const auto current = PvCamera(static_cast<float>(frame) / kPvFps);
@@ -192,7 +198,7 @@ void SelfTest() {
         if (!(distance < .25f && facing > .995f)) throw std::runtime_error("Discontinuous PV camera");
         previous = current;
     }
-    std::puts("Coastal checks passed: movement, column, pier, fishing dock, restaurant, continuous PV camera");
+    std::puts("Coastal checks passed: movement, column, pier, fishing dock, restaurant, promenade, continuous PV camera");
 }
 
 void SavePpm(const fs::path& path, const std::vector<uint8_t>& rgba, int scale = 1) {

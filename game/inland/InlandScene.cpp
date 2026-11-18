@@ -48,6 +48,7 @@ Scene::Scene(Renderer& renderer, const std::filesystem::path& assets) : m_route(
             throw std::runtime_error(std::string("Missing inland glTF: ") + name);
         }
     };
+    load(m_meadow, "inland_meadow");
     load(m_ground, "inland_ground");
     load(m_grass, "inland_grasses");
     load(m_trees, "inland_trees");
@@ -58,6 +59,7 @@ Scene::Scene(Renderer& renderer, const std::filesystem::path& assets) : m_route(
     load(m_sky, "inland_sky");
     m_canopy.SetScenicEffect({-5.f, 0.f, 0.f, 0.f});
     m_ground.SetScenicEffect({-4.f, 0.f, 0.f, 0.f});
+    m_meadow.SetScenicEffect({-7.f, 0.f, 0.f, 0.f});
     m_traveler.Load(renderer, assets, "sage");
     m_crew.Load(renderer, assets, "colleagues");
 }
@@ -90,6 +92,7 @@ void Scene::Draw(Renderer& renderer, const Shot& shot, float time) {
     m_lamps.SetScenicEffect({3.f, time, 0.f, lamps});
     m_sky.Draw(renderer, XMMatrixTranslation(eye.x, eye.y, eye.z), true);
     const auto identity = XMMatrixIdentity();
+    m_meadow.Draw(renderer, identity);
     m_ground.Draw(renderer, identity);
     m_grass.Draw(renderer, identity);
     m_trees.Draw(renderer, identity);

@@ -49,7 +49,7 @@ def prepare(output, desert=False, inland=False):
                                 "-c:v", "mjpeg", "-i", "pipe:0", "-frames:v", "1",
                                 *filters, "-pix_fmt", "rgb24", str(target.with_suffix(".png"))],
                                input=original, check=True)
-            elif target.suffix == ".gltf":
+            elif target.suffix == ".gltf" and model != "grass_medium_01":
                 gltf = json.loads(original)
                 for image in gltf["images"]:
                     image["uri"] = image["uri"].removesuffix(".jpg") + ".png"

@@ -77,7 +77,8 @@ XMFLOAT3 Route::Point(float distance,float offset,float height) const {
 XMFLOAT2 Route::Step(XMFLOAT2 position,XMFLOAT2 delta) const {
     const float distance=std::clamp(position.y+delta.y,-29.f,kRoadWalkEnd);
     const float axis=At(distance).x;
-    return {std::clamp(position.x+delta.x,axis-4.62f,axis+4.62f),distance};
+    const float rightEdge=distance>=40.f && distance<=61.f ? 8.1f : 4.62f;
+    return {std::clamp(position.x+delta.x,axis-4.62f,axis+rightEdge),distance};
 }
 
 Scene::Scene(Renderer& renderer,const std::filesystem::path& assets) : m_route(assets/"route.json") {

@@ -32,6 +32,7 @@ public:
 
 private:
     desert::Route m_route;
+    GltfProp m_meadow;
     GltfProp m_ground;
     GltfProp m_grass;
     GltfProp m_trees;

@@ -202,7 +202,8 @@ float4 PSMain(PSInput input) : SV_Target
     const float2 texDy = ddy(input.uv);
     const bool filterDistantDetail = gCoastalParams.x < -1.5f;
     const bool foliage = gCoastalParams.x == -3.f || gCoastalParams.x == -5.f;
-    const bool terrain = gCoastalParams.x == -4.f;
+    const bool meadow = gCoastalParams.x == -7.f;
+    const bool terrain = gCoastalParams.x == -4.f || meadow;
     const float footprint = max(length(texDx), length(texDy));
 
     // --- マテリアル値の取得 ---
@@ -250,6 +251,10 @@ float4 PSMain(PSInput input) : SV_Target
         const float broad = CoastalNoise(input.worldPos.xz * .024f);
         const float detail = CoastalNoise(input.worldPos.xz * .13f);
         albedo.rgb *= lerp(.70f, 1.28f, broad * .78f + detail * .22f);
+        if (meadow) {
+            const float3 seasonalGreen = lerp(float3(.019f,.040f,.009f),float3(.013f,.061f,.011f),broad);
+            albedo.rgb = albedo.rgb * float3(.72f,1.12f,.62f) + seasonalGreen * lerp(.54f,1.13f,detail);
+        }
         wet = gScenicWeather.x * smoothstep(.24f, .79f, detail);
         albedo.rgb *= 1.f - .22f * wet;
         roughness = lerp(roughness, .18f, wet * .74f);

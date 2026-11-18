@@ -70,13 +70,15 @@ void SelfTest(const desert::Route& route) {
     if (end.y!=desert::kRoadWalkEnd || std::abs(end.x-route.At(end.y).x-4.62f)>.001f) {
         throw std::runtime_error("Walking corridor boundary failed");
     }
+    const auto stop=route.Step({2.f,50.f},{20.f,0.f});
+    if (std::abs(stop.x-route.At(stop.y).x-8.1f)>.001f) throw std::runtime_error("Roadside turnout failed");
     for (int frame=0; frame<kSeconds*kFrameRate; ++frame) {
         const auto shot=Compose(route,static_cast<float>(frame)/kFrameRate);
         if (!std::isfinite(shot.camera.GetYaw()) || shot.camera.GetPosition().y < 1.f) {
             throw std::runtime_error("Invalid desert camera");
         }
     }
-    std::puts("Desert checks passed: road keys, interpolation, walking boundary, 288 camera samples");
+    std::puts("Desert checks passed: road keys, interpolation, walking boundary, turnout, 288 camera samples");
 }
 
 void SavePpm(const fs::path& path,const std::vector<uint8_t>& rgba) {

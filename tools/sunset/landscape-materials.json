@@ -1,5 +1,13 @@
 {
   "grass_medium_01": {
+    "grass_medium_01_1k.gltf": [
+      "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/grass_medium_01/grass_medium_01_1k.gltf",
+      "3e5e2a314c94e16de54fd7c28e41709731fbd2b1613ab539f1544f622ddb6a85"
+    ],
+    "grass_medium_01.bin": [
+      "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/grass_medium_01/grass_medium_01.bin",
+      "f4587cabdb96a2e96d8be644923dc954a248edfaaa717a0ff224cacb898bee1f"
+    ],
     "diff.jpg": [
       "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/grass_medium_01/grass_medium_01_diff_1k.jpg",
       "71495bd6a11fddcab0aaff38246fea1a7b802a705483f1c7cbca53955daa8050"
