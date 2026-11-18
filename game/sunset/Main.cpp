@@ -180,11 +180,11 @@ int Capture(const fs::path& directory) {
                 const auto start = std::chrono::steady_clock::now();
                 scene.Draw(renderer, camera, detail, time, PvDaylight(time));
                 renderer.EndFrame();
-                const auto time = std::chrono::duration<double, std::milli>(
+                const auto durationMs = std::chrono::duration<double, std::milli>(
                     std::chrono::steady_clock::now() - start).count();
                 if (i >= kWarmup) {
                     measurements << shot << ',' << asset << ',' << scene.TriangleCount(detail) << ','
-                                 << (i - kWarmup) << ',' << time << '\n';
+                                 << (i - kWarmup) << ',' << durationMs << '\n';
                 }
             }
             SavePpm(directory / (std::string(shot) + "-" + asset + ".ppm"), renderer.ReadOffscreenRgba());

@@ -1,4 +1,5 @@
 #include "RayTracing.hlsli"
+#include "WarmFill.hlsli"
 #ifndef ENGINE_SHADOWS
 #define ENGINE_SHADOWS 1
 #endif
@@ -17,6 +18,10 @@ cbuffer SceneConstants : register(b0)
     float4   gCameraPos;   // xyz: カメラ位置, w: フォグ有効フラグ
     float4x4 gLightViewProj; // ステージL-03b: ライト視点のビュー×射影
     float4   gShadowParams;  // x=1/解像度, y=深度バイアス, z=有効フラグ, w=未使用
+    float4   gBaseColorFactor;
+    float4   gMaterialParams;
+    float4   gCoastalParams;
+    float4   gFillLight;
 };
 
 // ステージL-03b: シャドウマップ（ライト視点の深度）と比較サンプラー。
@@ -98,7 +103,7 @@ float4 PSMain(PSInput input) : SV_Target
     float3 diffuse  = gLightColor.rgb * gLightColor.w * diff * base;
     float3 specular = gLightColor.rgb * gLightColor.w * spec * 0.3f;
 
-    float3 color = ambient + shadow * (diffuse + specular);
+    float3 color = ambient + shadow * (diffuse + specular) + base * WarmFill(gFillLight, input.worldPos, N);
 #if ENGINE_RT_REFLECTIONS
     color = lerp(color,RayReflection(input.worldPos,N,V,L,gLightColor.rgb*gLightColor.w,gAmbient.rgb),.25f);
 #endif

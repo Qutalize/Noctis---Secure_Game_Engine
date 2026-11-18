@@ -24,7 +24,12 @@ struct Voice {
     std::vector<BYTE> samples;
 
     ~Voice() {
+        Reset();
+    }
+
+    void Reset() {
         if (source) source->DestroyVoice();
+        source = nullptr;
     }
 
     void Start(IXAudio2& engine, const std::filesystem::path& file, float level) {
@@ -54,8 +59,7 @@ struct Voice {
         buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
         if (FAILED(source->SetVolume(level)) || FAILED(source->SubmitSourceBuffer(&buffer)) ||
             FAILED(source->Start())) {
-            source->DestroyVoice();
-            source = nullptr;
+            Reset();
         }
     }
 };
@@ -70,14 +74,8 @@ struct CoastalAudio::State {
 
     ~State() {
         if (engine) engine->StopEngine();
-        if (music.source) {
-            music.source->DestroyVoice();
-            music.source = nullptr;
-        }
-        if (sea.source) {
-            sea.source->DestroyVoice();
-            sea.source = nullptr;
-        }
+        music.Reset();
+        sea.Reset();
         if (master) master->DestroyVoice();
         engine.Reset();
         if (com) CoUninitialize();
@@ -86,7 +84,7 @@ struct CoastalAudio::State {
 
 float VillaGain(const DirectX::XMFLOAT3& listener) {
     const float distance = std::hypot(listener.x - kVilla.x, listener.z - kVilla.z);
-    const float relative = distance / 5.2f;
+    const float relative = distance / 6.3f;
     return 1.f / (1.f + relative * relative * relative);
 }
 

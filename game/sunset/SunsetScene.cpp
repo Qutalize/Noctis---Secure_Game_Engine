@@ -272,10 +272,10 @@ Texture StoneNormals(Renderer& renderer) {
 Mesh SeaGrid(Renderer& renderer) {
     std::vector<float> columns;
     std::vector<float> rows;
-    for (float x = -148.f; x < 148.f; x += std::abs(x) > 34.f ? 3.f : .30f) columns.push_back(x);
-    columns.push_back(148.f);
-    for (float z = -58.f; z < 135.f; z += z < -18.f || z > 44.f ? 2.2f : .30f) rows.push_back(z);
-    rows.push_back(135.f);
+    for (float x = -309.f; x < 309.f; x += std::abs(x) > 34.f ? 5.f : .30f) columns.push_back(x);
+    columns.push_back(309.f);
+    for (float z = -58.f; z < 309.f; z += z < -18.f || z > 44.f ? 4.f : .30f) rows.push_back(z);
+    rows.push_back(309.f);
     std::vector<PbrVertex> vertices;
     std::vector<uint32_t> indices;
     const auto stride = static_cast<uint32_t>(columns.size());
@@ -685,6 +685,7 @@ void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float 
                                  {1.f, Mix(.93f, .64f, sunset), Mix(.86f, .36f, sunset)},
                                  Mix(1.07f, .03f, dusk),
                                  {Mix(.64f, .129f, dusk), Mix(.69f, .17f, dusk), Mix(.75f, .28f, dusk)});
+    renderer.SetWarmFillLight({.2f, 3.08f, 24.1f}, .74f * dusk);
     renderer.SetShadowExtent(42.f);
     renderer.BeginFrame(camera);
     m_skyMaterial.coastalParams = {2.f, time, sunset, dusk};

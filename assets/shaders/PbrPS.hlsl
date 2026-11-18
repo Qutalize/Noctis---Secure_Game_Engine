@@ -31,9 +31,11 @@ cbuffer SceneConstants : register(b0)
     float4   gBaseColorFactor;
     float4   gMaterialParams;   // x=metallic, y=roughness, z=法線マップ強度, w=テクスチャフラグ
     float4 gCoastalParams;
+    float4 gFillLight;
 };
 
 #include "SunsetWaves.hlsli"
+#include "WarmFill.hlsli"
 
 Texture2D gBaseColorMap : register(t0);
 Texture2D gNormalMap    : register(t1);
@@ -236,7 +238,7 @@ float4 PSMain(PSInput input) : SV_Target
     // 今は定数の環境光 × AO で代用している。金属が暗く沈みがちなのはこのため。
     float3 ambient = gAmbient.rgb * albedo.rgb * ao;
 
-    float3 color = ambient + direct;
+    float3 color = ambient + direct + albedo.rgb * WarmFill(gFillLight, input.worldPos, N);
 #if ENGINE_RT_REFLECTIONS
     color = lerp(color,RayReflection(input.worldPos,N,V,L,gLightColor.rgb*gLightColor.w,gAmbient.rgb),FresnelSchlick(ndotv,f0) * (1.0f - .7f * roughness));
 #endif

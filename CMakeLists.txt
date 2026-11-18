@@ -330,7 +330,7 @@ if (DXC_EXE)
     endfunction()
 
     compile_shader(SimpleVS.hlsl VSMain vs_6_0 SimpleVS.dxil)
-    compile_shader(SimplePS.hlsl PSMain ps_6_0 SimplePS.dxil)
+    compile_shader(SimplePS.hlsl PSMain ps_6_0 SimplePS.dxil "${CMAKE_SOURCE_DIR}/assets/shaders/WarmFill.hlsli")
     compile_shader(OverlayVS.hlsl VSMain vs_6_0 OverlayVS.dxil)
     compile_shader(OverlayPS.hlsl PSMain ps_6_0 OverlayPS.dxil)
     if (NOT GAME_PROFILE STREQUAL "range")
@@ -340,7 +340,8 @@ if (DXC_EXE)
     compile_shader(ShadowVS.hlsl VSMain vs_6_0 ShadowVS.dxil)
     # ステージL-02: PBR（Cook-Torrance + 法線マップ）
     compile_shader(PbrVS.hlsl VSMain vs_6_0 PbrVS.dxil "${CMAKE_SOURCE_DIR}/assets/shaders/SunsetWaves.hlsli")
-    compile_shader(PbrPS.hlsl PSMain ps_6_0 PbrPS.dxil "${CMAKE_SOURCE_DIR}/assets/shaders/SunsetWaves.hlsli")
+    compile_shader(PbrPS.hlsl PSMain ps_6_0 PbrPS.dxil "${CMAKE_SOURCE_DIR}/assets/shaders/SunsetWaves.hlsli"
+                   "${CMAKE_SOURCE_DIR}/assets/shaders/WarmFill.hlsli")
     # ステージL-04b: GPU スキニング
     compile_shader(PbrSkinnedVS.hlsl VSMain vs_6_0 PbrSkinnedVS.dxil)
     compile_shader(ShadowSkinnedVS.hlsl VSMain vs_6_0 ShadowSkinnedVS.dxil)
