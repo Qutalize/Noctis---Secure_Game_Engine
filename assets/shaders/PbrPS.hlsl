@@ -258,6 +258,11 @@ float4 PSMain(PSInput input) : SV_Target
     }
 
     float3 V = normalize(gCameraPos.xyz - input.worldPos);
+    if (gCoastalParams.x < -2.5f) {
+        N = normalize(lerp(N * (dot(N, V) < 0.f ? -1.f : 1.f), float3(0.f, 1.f, 0.f), .54f));
+        const float colorPatch = CoastalNoise(input.worldPos.xz * .35f);
+        albedo.rgb *= lerp(.56f, 1.20f, input.uv.y * .72f + colorPatch * .28f);
+    }
     float3 L = normalize(-gLightDir.xyz);   // gLightDir は光が進む向き
     float3 H = normalize(V + L);
 

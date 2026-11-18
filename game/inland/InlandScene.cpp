@@ -31,7 +31,7 @@ Shot ComposeShot(const desert::Route& route, float time) {
     const float travel = phase * phase * (3.f - 2.f * phase);
     if (time < 4.f) {
         const auto eye = route.Point(-13.f + 14.f * travel, 9.f - 6.f * travel, 5.2f - 2.4f * travel);
-        return {LookAt(eye, route.Point(32.f + 8.f * travel, -3.f + 2.f * travel, .6f)), 45.f, .20f};
+        return {LookAt(eye, route.Point(21.f + 8.f * travel, -10.f + 4.f * travel, .6f)), 43.f, .16f};
     }
     if (time < 8.f) {
         const auto eye = route.Point(58.f + 15.f * travel, -11.6f + 7.5f * travel,
@@ -72,8 +72,8 @@ void Scene::Draw(Renderer& renderer, const Shot& shot, float time) {
                                  std::lerp(1.82f, .55f, dusk), {.49f, .55f, .64f});
     renderer.SetCoastalHaze({.45f, .50f, .55f}, .00175f);
     renderer.SetShadowExtent(52.f);
-    renderer.SetWarmFillLight({-4.1f, 4.9f, 115.f}, lamps * 2.45f);
-    renderer.SetWarmAccentLights({6.7f, 4.85f, 144.f, lamps * 2.15f}, {-16.f, 4.9f, 118.4f, lamps * 2.25f});
+    renderer.SetWarmFillLight({-4.1f, 4.85f, 115.f}, lamps * 13.9f);
+    renderer.SetWarmAccentLights({-4.1f, 4.85f, 144.f, lamps * 12.f}, {6.7f, 4.85f, 144.f, lamps * 12.f});
     renderer.BeginFrame(shot.camera, shot.fieldOfView);
 
     const auto& eye = shot.camera.GetPosition();

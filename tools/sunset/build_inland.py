@@ -8,13 +8,14 @@ from build_architecture import Model
 
 
 COLORS = {
-    "meadow": (.82, .94, .67, 1.), "silt": (.84, .79, .66, 1.),
+    "meadow": (.68, 1., .53, 1.), "silt": (.76, .72, .60, 1.),
     "track": (1., .89, .74, 1.), "deck": (.85, .77, .66, 1.),
-    "grass": (.27, .36, .113, 1.), "seed": (.48, .43, .19, 1.),
+    "grass": (.19, .29, .079, 1.), "seed": (.33, .34, .11, 1.),
     "reeds": (.22, .31, .115, 1.), "rust": (.90, .73, .61, 1.),
     "sheet": (.70, .78, .80, 1.), "concrete": (.51, .49, .45, 1.),
     "metal": (.30, .34, .35, 1.), "glass": (.20, .25, .27, 1.),
     "tread": (.59, .31, .09, 1.), "lamp": (1., .67, .30, 1.),
+    "roadbed": (.21, .23, .23, 1.),
     "sky": (1., 1., 1., 1.), "water": (1., 1., 1., 1.),
 }
 TEXTURES = {"meadow": "sparse_grass", "silt": "mud_forest", "track": "mud_forest",
@@ -34,7 +35,7 @@ def pond(x, z):
     return ((x-center)/26.)**2 + ((z-78.)/28.)**2
 
 
-def terrain_y(keys, x, z):
+def terrain_y(keys, hills, x, z):
     center, track = route_at(keys, z)
     distance = abs(x-center)
     wave = 1.85*math.sin(x*.069+z*.036)+.72*math.cos(x*.127-z*.092)
@@ -43,7 +44,12 @@ def terrain_y(keys, x, z):
     marsh = min(1.3, 1.15*(pond(x,z)-1.))
     blend = max(0., min(1., (z-42.)/14., (115.-z)/13.))
     yield_to_yard = max(0., min(1., (z-105.)/12.))
-    return (meadow*(1.-blend)+marsh*blend)*(1.-yield_to_yard)+.89*yield_to_yard
+    relief = sum(height * math.exp(-((x-a)/width)**2-((z-b)/length)**2)
+                 for a,b,width,length,height in hills)
+    relief *= max(0., min(1., (distance-3.)/8., (pond(x,z)-1.)*.8))
+    if z > 108.:
+        relief *= max(min(1., (z-187.)/29.), max(0., min(1., (distance-28.)/19.)))
+    return (meadow*(1.-blend)+marsh*blend)*(1.-yield_to_yard)+.89*yield_to_yard+relief
 
 
 def surface(model, part, xs, zs, point, uv_scale):
@@ -55,22 +61,25 @@ def surface(model, part, xs, zs, point, uv_scale):
                 model.face(part, points, [(p[0]*uv_scale,p[2]*uv_scale) for p in points])
 
 
-def vegetation(keys):
+def vegetation(keys, hills):
     model = Model()
     rng = random.Random(7159)
-    for _ in range(4200):
+    for index in range(5410):
         x,z = rng.uniform(-51.,48.),rng.uniform(-22.,111.)
+        if index < 2280:
+            z = rng.uniform(-23.,49.)
+            x = route_at(keys,z)[0]+rng.uniform(-20.,20.)
         if abs(x-route_at(keys,z)[0]) < 2.45:
             continue
-        y = terrain_y(keys,x,z)
+        y = terrain_y(keys,hills,x,z)
         marsh = 51.<z<106.
         if (marsh and not -.36 < y < .47) or (not marsh and rng.random() < .17):
             continue
         for blade in range(rng.randrange(4,8) if marsh else rng.randrange(3,6)):
             angle = rng.uniform(0.,math.tau)
-            width = rng.uniform(.035,.085) if marsh else rng.uniform(.046,.092)
+            width = rng.uniform(.021,.066) if marsh else rng.uniform(.017,.040)
             dx,dz = math.cos(angle),math.sin(angle)
-            height = rng.uniform(.43,1.36) if marsh else rng.uniform(.19,.63)
+            height = rng.uniform(.63,1.46) if marsh else rng.uniform(.15,.52)
             ox,oz = x+rng.uniform(-.21,.21),z+rng.uniform(-.21,.21)
             bend = rng.uniform(.14,.52)*height
             base_a = (ox-dx*width,y-.055,oz-dz*width)
@@ -109,6 +118,10 @@ def path_model(keys):
 
 def factory(layout):
     model, lamps = Model(), Model()
+    model.box("roadbed",-5.4,.896,117.,11.6,.085,63.)
+    for z in range(119,178,4):
+        for x in (-2.9,3.5):
+            model.box("tread",x,.982,z,.09,.013,1.3)
     for x,z,w,d,wall in layout["shed"]:
         floor, eave, ridge = .88, .88+wall, .88+wall+w*.14
         model.box("concrete",x-.23,.64,z-.25,w+.46,.53,d+.5)
@@ -138,6 +151,10 @@ def factory(layout):
             side_z = z+n*d/5
             model.box("metal",x-.06,floor,side_z,.29,wall,.25)
             model.box("metal",x+w-.22,floor,side_z,.29,wall,.25)
+            for edge in (x-.12,x+w+.06):
+                model.box("concrete",edge,eave-1.62,side_z+.41,.071,.81,1.49)
+                for louver in range(4):
+                    model.box("metal",edge-.03,eave-1.52+louver*.16,side_z+.48,.13,.06,1.32)
     for x,z,radius,height in layout["tanks"]:
         model.box("concrete",x-radius-1.,.74,z-radius-1.,2.*radius+2.,.36,2.*radius+2.)
         model.tube("sheet",(x,1.1,z),(x,height,z),radius,28)
@@ -180,22 +197,22 @@ def factory(layout):
 
 def build_inland(root):
     spec = json.loads(Path(__file__).with_name("inland-layout.json").read_text(encoding="utf-8"))
-    keys = spec["road"]
+    keys, hills = spec["road"], spec["hills"]
     ground = Model()
-    elevation = lambda x,z: (x,terrain_y(keys,x,z),z)
+    elevation = lambda x,z: (x,terrain_y(keys,hills,x,z),z)
     xs = range(-132,133,3)
-    for material,start,end in [("meadow",-66,48),("silt",48,114),("track",114,213)]:
+    for material,start,end in [("meadow",-66,48),("silt",48,114),("track",114,189),("meadow",189,321)]:
         surface(ground,material,xs,range(start,end+1,3),elevation,.36)
     water = Model()
     point = lambda x,z: (x,0.,z)
     for z in range(49,108,2):
         for x in range(-43,42,2):
             quad = [point(x,z),point(x,z+2),point(x+2,z+2),point(x+2,z)]
-            water.face("water",quad,[(max(0.,-terrain_y(keys,a,c)),0.) for a,_,c in quad])
+            water.face("water",quad,[(max(0.,-terrain_y(keys,hills,a,c)),0.) for a,_,c in quad])
     sky = Model()
     sky.box("sky",-310.,-310.,-310.,620.,620.,620.)
     yard, bulbs = factory(spec)
-    for name,model in (("inland_ground",ground),("inland_path",path_model(keys)),("inland_grasses",vegetation(keys)),
+    for name,model in (("inland_ground",ground),("inland_path",path_model(keys)),("inland_grasses",vegetation(keys,hills)),
                        ("inland_yard",yard),("inland_lamps",bulbs),("inland_water",water),("inland_sky",sky)):
         model.write(root,name,COLORS,TEXTURES)
     (root/"route.json").write_text(json.dumps({"road": keys}),encoding="utf-8")
