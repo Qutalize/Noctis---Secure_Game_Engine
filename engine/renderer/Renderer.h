@@ -120,6 +120,8 @@ struct alignas(256) SceneConstants {
     DirectX::XMFLOAT4   materialParams;   // x=metallic, y=roughness, z=法線強度, w=テクスチャ有無
     DirectX::XMFLOAT4   coastalParams;    // x=描画種別, y=経過秒, z=夕景, w=薄暮
     DirectX::XMFLOAT4   fillLight;        // xyz=位置, w=強度
+    DirectX::XMFLOAT4   accentLight;
+    DirectX::XMFLOAT4   rearLight;
 };
 static_assert(sizeof(SceneConstants) == 512);
 
@@ -360,6 +362,10 @@ public:
                              const DirectX::XMFLOAT3& ambient);
     void SetWarmFillLight(const DirectX::XMFLOAT3& position, float intensity) {
         m_fillLight = {position.x, position.y, position.z, intensity};
+    }
+    void SetWarmAccentLights(const DirectX::XMFLOAT4& accent, const DirectX::XMFLOAT4& rear) {
+        m_accentLight = accent;
+        m_rearLight = rear;
     }
 
     // 画面の横/縦比（2D オーバーレイのアスペクト補正に使う）。
@@ -682,6 +688,8 @@ private:
     DirectX::XMFLOAT4 m_lightColor{ 1.0f, 0.98f, 0.95f, 1.0f }; // w=強度
     DirectX::XMFLOAT4 m_ambient{ 0.25f, 0.25f, 0.30f, 0.0f };
     DirectX::XMFLOAT4 m_fillLight{};
+    DirectX::XMFLOAT4 m_accentLight{};
+    DirectX::XMFLOAT4 m_rearLight{};
     DirectX::XMFLOAT3 m_cameraPos{ 0.0f, 0.0f, 0.0f };          // BeginFrame で更新
 
     bool m_initialized = false;

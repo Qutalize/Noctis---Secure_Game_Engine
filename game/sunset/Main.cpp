@@ -6,6 +6,7 @@
 #include "engine/math/Collision.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -23,6 +24,7 @@ namespace fs = std::filesystem;
 namespace {
 constexpr int kWidth = 960;
 constexpr int kHeight = 540;
+constexpr int kPvSupersample = 2;
 constexpr int kPvFps = 24;
 constexpr int kPvSeconds = 20;
 constexpr float kCloseTime = 12.3f;
@@ -85,7 +87,7 @@ float Ease(float progress) {
     return fraction * fraction * (3.f - 2.f * fraction);
 }
 
-Camera PvCamera(float time) {
+Camera ComparisonCamera(float time) {
     if (time < 5.f) {
         const float amount = Ease(time / 5.f);
         return LookAt({std::lerp(-14.f, -12.6f, amount), std::lerp(13.2f, 11.8f, amount),
@@ -104,6 +106,43 @@ Camera PvCamera(float time) {
     const float amount = Ease((time - 14.5f) / 5.5f);
     return LookAt({std::lerp(-.38f, .1f, amount), 1.68f, std::lerp(14.36f, 23.7f, amount)},
                   {-.10f, 1.74f, 29.3f});
+}
+
+struct CameraKey {
+    float time;
+    XMFLOAT3 eye;
+    XMFLOAT3 target;
+};
+
+Camera PvCamera(float time) {
+    static constexpr std::array track{
+        CameraKey{0.f, {-14.f, 13.2f, -26.f}, {-2.1f, .5f, 25.f}},
+        CameraKey{3.3f, {-7.f, 8.5f, -19.f}, {-.8f, .1f, 12.f}},
+        CameraKey{6.4f, {1.8f, 3.4f, -10.4f}, {-2.8f, .12f, -1.6f}},
+        CameraKey{9.4f, {3.22f, 1.75f, -3.1f}, {6.85f, 1.25f, 4.6f}},
+        CameraKey{12.f, {3.21f, 1.77f, 3.3f}, {7.55f, 1.45f, 5.7f}},
+        CameraKey{14.7f, {3.18f, 2.15f, 12.2f}, {.4f, 2.2f, 23.8f}},
+        CameraKey{17.0f, {1.35f, 1.78f, 18.1f}, {-2.9f, 1.43f, 25.1f}},
+        CameraKey{20.f, {-.69f, 1.69f, 24.2f}, {3.30f, 1.63f, 27.7f}},
+    };
+    const auto next = std::upper_bound(track.begin(), track.end() - 1, time,
+        [](float value, const CameraKey& key) { return value < key.time; });
+    const auto index = static_cast<std::size_t>(std::max<std::ptrdiff_t>(1, next - track.begin()) - 1);
+    const auto& start = track[index];
+    const auto& end = track[index + 1];
+    const float duration = end.time - start.time;
+    const float amount = std::clamp((time - start.time) / duration, 0.f, 1.f);
+    const auto sample = [&](XMFLOAT3 CameraKey::* field) {
+        const auto point = [&](std::size_t key) { return XMLoadFloat3(&(track[key].*field)); };
+        const auto before = index > 0 ? index - 1 : index;
+        const auto after = std::min(index + 2, track.size() - 1);
+        const auto tangentStart = (point(index + 1) - point(before)) * (duration / (end.time - track[before].time));
+        const auto tangentEnd = (point(after) - point(index)) * (duration / (track[after].time - start.time));
+        XMFLOAT3 value;
+        XMStoreFloat3(&value, XMVectorHermite(point(index), tangentStart, point(index + 1), tangentEnd, amount));
+        return value;
+    };
+    return LookAt(sample(&CameraKey::eye), sample(&CameraKey::target));
 }
 
 float PvDaylight(float time) {
@@ -143,17 +182,39 @@ void SelfTest() {
     dining.center = {0.f, .85f, 14.f};
     for (int step = 0; step < 260; ++step) dining.Move(0.f, 1.f, 1.f / 60.f);
     if (dining.center.z < 24.7f) throw std::runtime_error("Restaurant route failed");
-    std::puts("Coastal walk checks passed: movement, column, end of pier, fishing dock, restaurant route");
+    auto previous = PvCamera(0.f);
+    for (int frame = 1; frame <= kPvSeconds * kPvFps; ++frame) {
+        const auto current = PvCamera(static_cast<float>(frame) / kPvFps);
+        const auto movement = XMLoadFloat3(&current.GetPosition()) - XMLoadFloat3(&previous.GetPosition());
+        const float distance = XMVectorGetX(XMVector3Length(movement));
+        const float facing = XMVectorGetX(XMVector3Dot(current.GetForward(), previous.GetForward()));
+        if (!(distance < .25f && facing > .995f)) throw std::runtime_error("Discontinuous PV camera");
+        previous = current;
+    }
+    std::puts("Coastal checks passed: movement, column, pier, fishing dock, restaurant, continuous PV camera");
 }
 
-void SavePpm(const fs::path& path, const std::vector<uint8_t>& rgba) {
-    if (rgba.size() != static_cast<std::size_t>(kWidth * kHeight * 4)) {
+void SavePpm(const fs::path& path, const std::vector<uint8_t>& rgba, int scale = 1) {
+    if (rgba.size() != static_cast<std::size_t>(kWidth * kHeight * 4 * scale * scale)) {
         throw std::runtime_error("Unexpected capture size");
     }
     std::vector<uint8_t> rgb;
     rgb.reserve(kWidth * kHeight * 3);
-    for (std::size_t i = 0; i < rgba.size(); i += 4) {
-        rgb.insert(rgb.end(), {rgba[i], rgba[i + 1], rgba[i + 2]});
+    const int count = scale * scale;
+    for (int row = 0; row < kHeight; ++row) {
+        for (int column = 0; column < kWidth; ++column) {
+            std::array<int, 3> channels{};
+            for (int subRow = 0; subRow < scale; ++subRow) {
+                for (int subColumn = 0; subColumn < scale; ++subColumn) {
+                    const auto offset = static_cast<std::size_t>(4 * ((row * scale + subRow) *
+                        kWidth * scale + column * scale + subColumn));
+                    for (std::size_t channel = 0; channel < channels.size(); ++channel) {
+                        channels[channel] += rgba[offset + channel];
+                    }
+                }
+            }
+            for (const int channel : channels) rgb.push_back(static_cast<uint8_t>((channel + count / 2) / count));
+        }
     }
     std::ofstream stream(path, std::ios::binary);
     stream << "P6\n" << kWidth << ' ' << kHeight << "\n255\n";
@@ -173,7 +234,7 @@ int Capture(const fs::path& directory) {
     for (const auto& [shot, time] : {std::pair{"wide", 0.f}, std::pair{"close", kCloseTime}}) {
         for (const auto detail : {sunset::Detail::Simple, sunset::Detail::Detailed}) {
             const std::string asset = detail == sunset::Detail::Simple ? "simple" : "detailed";
-            const auto camera = PvCamera(time);
+            const auto camera = ComparisonCamera(time);
             constexpr int kWarmup = 2;
             constexpr int kSamples = 6;
             for (int i = 0; i < kWarmup + kSamples; ++i) {
@@ -202,10 +263,29 @@ int Capture(const fs::path& directory) {
     return 0;
 }
 
+int CaptureRevision(const fs::path& directory, int scale) {
+    if (!fs::create_directory(directory)) throw std::runtime_error("Comparison directory must be new");
+    Renderer renderer;
+    renderer.Initialize(nullptr, kWidth * scale, kHeight * scale);
+    if (!renderer.IsPbrAvailable() || !renderer.IsShadowEnabled()) throw std::runtime_error("Missing PBR or shadow pipeline");
+    sunset::Scene scene(renderer);
+    for (const auto& [name, camera, time, daylight] : {
+             std::tuple{"wide", ComparisonCamera(0.f), 0.f, 0.f},
+             std::tuple{"shallows", LookAt({-8.1f, 4.2f, -12.1f}, {-8.3f, -.65f, -4.4f}), 4.f, .12f},
+             std::tuple{"ruins", LookAt({-4.4f, 12.f, 44.f}, {-32.f, 8.5f, 128.f}), 7.f, .33f},
+             std::tuple{"dining", LookAt({-.3f, 1.74f, 22.3f}, {3.46f, 1.72f, 26.4f}), 19.f, .97f}}) {
+        scene.Draw(renderer, camera, sunset::Detail::Detailed, time, daylight);
+        renderer.EndFrame();
+        SavePpm(directory / (std::string(name) + ".ppm"), renderer.ReadOffscreenRgba(), scale);
+    }
+    renderer.Shutdown();
+    return 0;
+}
+
 int RenderPv(const fs::path& directory) {
     if (!fs::create_directory(directory)) throw std::runtime_error("PV frame directory must be new");
     Renderer renderer;
-    renderer.Initialize(nullptr, kWidth, kHeight);
+    renderer.Initialize(nullptr, kWidth * kPvSupersample, kHeight * kPvSupersample);
     if (!renderer.IsPbrAvailable() || !renderer.IsShadowEnabled()) throw std::runtime_error("Missing PBR or shadow pipeline");
     sunset::Scene scene(renderer);
     std::ofstream listener(directory / "listener.csv");
@@ -218,7 +298,7 @@ int RenderPv(const fs::path& directory) {
         renderer.EndFrame();
         char name[24];
         std::snprintf(name, sizeof(name), "frame-%04d.ppm", frame);
-        SavePpm(directory / name, renderer.ReadOffscreenRgba());
+        SavePpm(directory / name, renderer.ReadOffscreenRgba(), kPvSupersample);
     }
     if (!listener) throw std::runtime_error("Could not write audio trajectory");
     renderer.Shutdown();
@@ -303,8 +383,10 @@ int wmain(int argc, wchar_t** argv) {
             return 0;
         }
         if (argc == 3 && operation == L"--capture") return Capture(argv[2]);
+        if (argc == 3 && operation == L"--compare") return CaptureRevision(argv[2], 1);
+        if (argc == 3 && operation == L"--compare-aa") return CaptureRevision(argv[2], kPvSupersample);
         if (argc == 3 && operation == L"--pv-frames") return RenderPv(argv[2]);
-        throw std::runtime_error("Usage: SunsetWalk.exe [--self-test | --capture NEW_DIRECTORY | --pv-frames NEW_DIRECTORY]");
+        throw std::runtime_error("Usage: SunsetWalk.exe [--self-test | --capture | --compare | --compare-aa | --pv-frames]");
     } catch (const std::exception& error) {
         std::fprintf(stderr, "SunsetWalk: %s\n", error.what());
         return 1;

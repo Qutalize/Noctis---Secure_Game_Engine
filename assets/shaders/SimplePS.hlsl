@@ -22,6 +22,8 @@ cbuffer SceneConstants : register(b0)
     float4   gMaterialParams;
     float4   gCoastalParams;
     float4   gFillLight;
+    float4   gAccentLight;
+    float4   gRearLight;
 };
 
 // ステージL-03b: シャドウマップ（ライト視点の深度）と比較サンプラー。
@@ -103,7 +105,9 @@ float4 PSMain(PSInput input) : SV_Target
     float3 diffuse  = gLightColor.rgb * gLightColor.w * diff * base;
     float3 specular = gLightColor.rgb * gLightColor.w * spec * 0.3f;
 
-    float3 color = ambient + shadow * (diffuse + specular) + base * WarmFill(gFillLight, input.worldPos, N);
+    float3 lamps = WarmFill(gFillLight, input.worldPos, N) + WarmFill(gAccentLight, input.worldPos, N) +
+                   WarmFill(gRearLight, input.worldPos, N);
+    float3 color = ambient + shadow * (diffuse + specular) + base * lamps;
 #if ENGINE_RT_REFLECTIONS
     color = lerp(color,RayReflection(input.worldPos,N,V,L,gLightColor.rgb*gLightColor.w,gAmbient.rgb),.25f);
 #endif

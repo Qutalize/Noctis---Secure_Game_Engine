@@ -14,6 +14,11 @@
 | `models/test_splat.ply` | 3DGS 点群（GS-01 ローダー検証用） | 自作（`tools/make_test_ply.py` で生成） | パブリックドメイン |
 | 地面 / 壁 / 木箱 / カード絵柄 | テクスチャ | 自作（`game/GroundTexture.cpp`・`game/CardArt.cpp` で手続き生成） | パブリックドメイン |
 | BGM / 効果音 | 音源 | 自作（`engine/audio/AudioPlayer.cpp` で手続き生成） | パブリックドメイン |
+| `coastal-assets/rock_face_01` | 岩壁モデル・PBR材質 | [Rock Face 01・Dario Barresi](https://polyhaven.com/a/rock_face_01) | CC0 |
+| `coastal-assets/outdoor_table_chair_set_01` | 木製テーブルと椅子・PBR材質 | [Outdoor Table Chair Set 01・James Ray Cock](https://polyhaven.com/a/outdoor_table_chair_set_01) | CC0 |
+| `coastal-assets/lantern_chandelier_01` | 吊り灯り・PBR材質 | [Lantern Chandelier 01・Kirill Sannikov](https://polyhaven.com/a/lantern_chandelier_01) | CC0 |
+
+海岸デモの3モデルは `tools/sunset/coastal-assets.json` に固定した配布元から取得する。既存のローダー向けにJPEGをPNGへ変換し、吊り灯りの透過ガラス面は省いてフレームとランプを使用する。
 
 ---
 

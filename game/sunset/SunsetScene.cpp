@@ -3,8 +3,11 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <filesystem>
 #include <initializer_list>
+#include <iterator>
 #include <numbers>
+#include <stdexcept>
 #include <vector>
 
 using namespace DirectX;
@@ -502,7 +505,6 @@ Mesh Restaurant(Renderer& renderer) {
     ColoredMesh mesh;
     constexpr XMFLOAT4 beam{.36f, .21f, .12f, 1};
     constexpr XMFLOAT4 canvas{.84f, .79f, .65f, 1};
-    constexpr XMFLOAT4 cloth{.77f, .73f, .65f, 1};
     for (int board = 0; board < 41; ++board) {
         mesh.Box(-6.06f, -.18f, 18.6f + board * .27f, 12.11f, .22f, .258f, beam);
     }
@@ -522,20 +524,8 @@ Mesh Restaurant(Renderer& renderer) {
         mesh.Face({{x,ridge,24.4f},{next,nextRidge,24.4f},{next,nextEave,30.0f},{x,eave,30.0f}}, roof);
         mesh.Face({{x,ridge - .07f,24.4f},{next,nextRidge - .07f,24.4f},{next,nextEave - .08f,18.3f},{x,eave - .08f,18.3f}}, beam);
     }
-    for (const float side : {-1.f, 1.f}) {
-        for (const float z : {21.5f, 24.5f, 27.5f}) {
-            const float x = side * 3.65f;
-            mesh.Box(x - .63f, .85f, z - .53f, 1.26f, .075f, 1.06f, cloth);
-            for (const float offset : {-.50f, .41f}) {
-                mesh.Box(x + offset, .04f, z - .41f, .087f, .81f, .091f, beam);
-                mesh.Box(x + offset, .04f, z + .32f, .087f, .81f, .091f, beam);
-            }
-            for (const float offset : {-.96f, .65f}) {
-                mesh.Box(x - .28f, .43f, z + offset, .56f, .085f, .43f, beam);
-                mesh.Box(x - .28f, .46f, z + offset + (offset < 0.f ? 0.f : .36f), .56f, .41f, .068f, beam);
-            }
-            mesh.Box(x - .03f, .92f, z - .03f, .16f, .11f, .17f, cloth);
-        }
+    for (float z : {19.1f, 21.7f, 24.3f, 26.9f, 29.4f}) {
+        mesh.Box(-5.73f, 3.06f, z, 11.46f, .17f, .13f, beam);
     }
     mesh.Box(-2.45f, .03f, 28.38f, 4.90f, .95f, .93f, beam);
     mesh.Box(-2.62f, .98f, 28.29f, 5.24f, .10f, 1.12f, canvas);
@@ -544,9 +534,9 @@ Mesh Restaurant(Renderer& renderer) {
 
 Mesh Lanterns(Renderer& renderer) {
     MeshData mesh;
-    for (const float x : {-4.42f, 4.42f}) {
-        for (const float z : {19.18f, 22.2f, 25.2f, 27.8f}) {
-            StoneBox(mesh, x - .13f, 2.54f, z - .13f, .26f, .41f, .26f);
+    for (const float side : {-1.f, 1.f}) {
+        for (const float z : {21.9f, 24.8f, 27.25f}) {
+            StoneBox(mesh, side * 3.46f - .055f, 2.999f, z - .055f, .11f, .12f, .11f);
         }
     }
     for (const float z : {4.6f, 5.78f, 6.96f}) {
@@ -647,6 +637,19 @@ Mesh Wing(Renderer& renderer, float side) {
 }
 
 Scene::Scene(Renderer& renderer) {
+    wchar_t executable[32768]{};
+    const auto pathSize = GetModuleFileNameW(nullptr, executable, static_cast<DWORD>(std::size(executable)));
+    if (!pathSize || pathSize >= std::size(executable)) throw std::runtime_error("Cannot locate coastal assets");
+    const auto models = std::filesystem::path(executable).parent_path() / "coastal-assets";
+    const auto load = [&](GltfProp& prop, const char* name) {
+        const auto path = (models / name / (std::string(name) + "_1k.gltf")).u8string();
+        if (!prop.Load(renderer, std::string(path.begin(), path.end()))) {
+            throw std::runtime_error(std::string("Missing coastal asset: ") + name);
+        }
+    };
+    load(m_rock, "rock_face_01");
+    load(m_diningSet, "outdoor_table_chair_set_01");
+    load(m_chandelier, "lantern_chandelier_01");
     m_sky = Sky(renderer);
     m_skyMaterial = renderer.CreatePbrMaterial(nullptr, nullptr, nullptr);
     m_skyMaterial.coastalParams.x = 2.f;
@@ -699,7 +702,9 @@ void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float 
                                  {1.f, Mix(.93f, .64f, sunset), Mix(.86f, .36f, sunset)},
                                  Mix(1.07f, .03f, dusk),
                                  {Mix(.64f, .129f, dusk), Mix(.69f, .17f, dusk), Mix(.75f, .28f, dusk)});
-    renderer.SetWarmFillLight({.2f, 3.08f, 24.1f}, 2.2f * dusk);
+    renderer.SetWarmFillLight({-3.46f, 2.98f, 24.8f}, 1.35f * dusk);
+    renderer.SetWarmAccentLights({3.46f, 2.98f, 24.8f, 1.44f * dusk},
+                                 {.3f, 2.78f, 27.0f, 1.19f * dusk});
     renderer.SetShadowExtent(42.f);
     renderer.BeginFrame(camera);
     m_skyMaterial.coastalParams = {2.f, time, sunset, dusk};
@@ -707,11 +712,28 @@ void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float 
     renderer.DrawPbrMesh(m_sky, m_skyMaterial, XMMatrixTranslation(eye.x, eye.y, eye.z), true);
     renderer.DrawMesh(m_islands, identity);
     renderer.DrawMesh(m_ruins, identity);
+    for (const auto& [x, y, z, scale, rotation] : {
+             std::array{-41.f, -2.3f, 124.f, 3.25f, .32f},
+             std::array{-28.8f, -2.7f, 119.7f, 3.9f, -.12f},
+             std::array{-15.94f, -2.4f, 123.f, 2.85f, -.58f},
+             std::array{-52.4f, -1.34f, 130.2f, 2.2f, .86f}}) {
+        m_rock.Draw(renderer, XMMatrixScaling(scale, scale, scale) * XMMatrixRotationY(rotation) *
+                             XMMatrixTranslation(x, y, z));
+    }
     renderer.DrawMesh(m_shore, identity);
     m_waterMaterial.coastalParams = {1.f, time, sunset, dusk};
     renderer.DrawPbrMesh(m_water, m_waterMaterial, identity);
     renderer.DrawMesh(m_boardwalk, identity);
     renderer.DrawMesh(m_restaurant, identity);
+    for (const float side : {-1.f, 1.f}) {
+        for (const float z : {21.9f, 24.8f, 27.25f}) {
+            m_diningSet.Draw(renderer, XMMatrixScaling(1.42f, 1.42f, 1.42f) *
+                                      XMMatrixRotationY(side * .72f) *
+                                      XMMatrixTranslation(side * 3.46f, .055f, z));
+            m_chandelier.Draw(renderer, XMMatrixScaling(1.01f, 1.01f, 1.01f) *
+                                        XMMatrixTranslation(side * 3.46f, 3.56f, z));
+        }
+    }
     m_lanternMaterial.coastalParams.w = dusk;
     renderer.DrawPbrMesh(m_lanterns, m_lanternMaterial, identity);
     const auto& buildings = detail == Detail::Detailed ? m_detailed : m_simple;

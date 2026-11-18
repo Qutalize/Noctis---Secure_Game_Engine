@@ -32,6 +32,8 @@ cbuffer SceneConstants : register(b0)
     float4   gMaterialParams;   // x=metallic, y=roughness, z=法線マップ強度, w=テクスチャフラグ
     float4 gCoastalParams;
     float4 gFillLight;
+    float4 gAccentLight;
+    float4 gRearLight;
 };
 
 #include "SunsetWaves.hlsli"
@@ -144,7 +146,8 @@ float4 PSMain(PSInput input) : SV_Target
         const float2 ripple = float2(CoastalNoise(rippleUV) - .5f, CoastalNoise(rippleUV.yx + 3.41f) - .5f);
         const float2 gradient = float2(WaveSurface(seaPosition + float2(.13f, 0), time) - wave,
                                       WaveSurface(seaPosition + float2(0, .13f), time) - wave) / .13f;
-        const float2 slope = (gradient * .72f + ripple * rippleGain) * lerp(1.0f, .12f, horizon);
+        const float2 micro = FineRipples(seaPosition, time) * .055f;
+        const float2 slope = (gradient * .59f + ripple * rippleGain + micro) * lerp(1.0f, .12f, horizon);
         const float3 normal = normalize(float3(-slope.x, 1.0f, -slope.y));
         const float3 view = normalize(gCameraPos.xyz - input.worldPos);
         const float3 reflected = reflect(-view, normal);
@@ -157,12 +160,15 @@ float4 PSMain(PSInput input) : SV_Target
         const float glint = (pow(alignment, 100.0f) * .20f + pow(alignment, 580.0f) * sparkle * 1.25f) *
             (1.0f - dusk) * smoothstep(-.02f, .08f, sun.y);
         const float shore = seaPosition.y - Shoreline(seaPosition.x);
-        const float runup = .35f + .54f * CoastalNoise(float2(seaPosition.x * .64f, time * .58f));
-        const float foamLine = 1.0f - smoothstep(.13f, .46f, abs(shore - runup));
-        const float wash = foamLine * smoothstep(.30f, .72f, CoastalNoise(wind * float2(2.8f, 3.5f) + patch));
+        const float runup = .22f + .47f * CoastalNoise(float2(seaPosition.x * .64f, time * .58f));
+        const float foamLine = 1.0f - smoothstep(.048f, .26f, abs(shore - runup));
+        const float wash = foamLine * smoothstep(.30f, .77f, CoastalNoise(wind * float2(3.8f, 5.1f) + patch));
         const float shadow = ComputeShadow(input.worldPos, saturate(dot(normal, sun)));
-        const float3 tint = lerp(float3(.19f, .65f, .61f), float3(.056f, .32f, .45f),
-                                 smoothstep(.15f, 15.0f, shore + patch.x * 1.8f)) * lerp(1.0f, .34f, dusk);
+        const float depth = max(.024f, shore * (.21f + .047f * patch.x) + wave);
+        const float daylight = lerp(1.f, .24f, dusk);
+        const float3 bottom = CoastalBottom(seaPosition, depth, view, slope, time, daylight);
+        const float3 tint = lerp(bottom, float3(.056f, .32f, .45f) * daylight,
+                                 smoothstep(2.6f, 4.3f, depth));
         const float3 sea = lerp(tint, sky, fresnel) +
             shadow * glint * lerp(float3(.83f, .91f, 1.f), float3(1.f, .64f, .35f), sunset);
         const float3 foam = float3(.82f, .90f, .85f) * lerp(1.0f, .40f, dusk);
@@ -238,7 +244,9 @@ float4 PSMain(PSInput input) : SV_Target
     // 今は定数の環境光 × AO で代用している。金属が暗く沈みがちなのはこのため。
     float3 ambient = gAmbient.rgb * albedo.rgb * ao;
 
-    float3 color = ambient + direct + albedo.rgb * WarmFill(gFillLight, input.worldPos, N);
+    float3 lamps = WarmFill(gFillLight, input.worldPos, N) + WarmFill(gAccentLight, input.worldPos, N) +
+                   WarmFill(gRearLight, input.worldPos, N);
+    float3 color = ambient + direct + albedo.rgb * lamps;
 #if ENGINE_RT_REFLECTIONS
     color = lerp(color,RayReflection(input.worldPos,N,V,L,gLightColor.rgb*gLightColor.w,gAmbient.rgb),FresnelSchlick(ndotv,f0) * (1.0f - .7f * roughness));
 #endif

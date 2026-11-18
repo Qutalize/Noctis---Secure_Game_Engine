@@ -19,6 +19,33 @@ float Shoreline(float x)
     return -11.0f + 1.55f * sin(.17f * x) + .54f * sin(.39f * x + 1.4f);
 }
 
+float2 FineRipples(float2 uv, float time)
+{
+    float2 motion = uv - float2(.13f, .39f) * time;
+    float2 drift = float2(CoastalNoise(motion * .38f), CoastalNoise(motion.yx * .59f));
+    float2 field = motion * float2(5.4f, 10.6f) + drift * 2.6f;
+    float footprint = max(length(ddx(field)), length(ddy(field)));
+    float2 ripples = float2(CoastalNoise(field), CoastalNoise(field.yx + 5.7f)) - .5f;
+    return ripples * (1.f - smoothstep(.28f, 1.25f, footprint));
+}
+
+float3 CoastalBottom(float2 seaPosition, float depth, float3 view, float2 slope, float time, float daylight)
+{
+    float path = depth / max(.28f, view.y);
+    float2 bottomUV = seaPosition - path * (view.xz * .56f + slope * .46f);
+    float2 rippleUV = bottomUV * float2(1.8f, 2.7f);
+    float2 shift = float2(CoastalNoise(rippleUV * .72f - .32f * time),
+                          CoastalNoise(rippleUV.yx * .81f + .21f * time));
+    float caustic = 1.f - smoothstep(.035f, .16f, abs(shift.x - shift.y));
+    float footprint = max(length(ddx(rippleUV)), length(ddy(rippleUV)));
+    caustic *= (1.f - smoothstep(.24f, .95f, footprint)) * exp(-.63f * depth);
+    float sand = CoastalNoise(bottomUV * 1.14f) * .65f + CoastalNoise(bottomUV * 4.3f) * .35f;
+    float3 bed = lerp(float3(.54f, .47f, .30f), float3(.85f, .75f, .54f), sand);
+    float3 transport = exp(-path * float3(.98f, .30f, .19f));
+    float3 scatter = float3(.071f, .39f, .46f) * daylight;
+    return bed * (daylight + .25f * caustic * daylight) * transport + scatter * (1.f - transport);
+}
+
 float WaveSurface(float2 seaPosition, float time)
 {
     float2 wind = seaPosition - time * float2(.18f, .41f);

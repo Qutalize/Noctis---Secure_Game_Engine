@@ -15,11 +15,23 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          ref: db8813c94bcb3f6c7b24b7c19dc83200933f7ae1
+          path: coastal-baseline
+      - name: Check video and asset conversion tools
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
       - name: Configure and build the native demo
         run: |
           cmake -S . -B build-ci -G "Visual Studio 18 2026" -A x64 -DGAME_PROFILE=all -DBUILD_SUNSET_WALK=ON
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cmake --build build-ci --config Release --target sunset_walk --parallel 2
+      - name: Verify and prepare the CC0 scenery assets
+        run: python -B tools/sunset/prepare_assets.py build-ci/Release/coastal-assets
       - name: Replay walk and capture controlled asset pairs using WARP
         run: |
           $exe = "build-ci/Release/SunsetWalk.exe"
@@ -28,12 +40,22 @@ jobs:
           & $exe --capture sunset-evidence
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -B tools/sunset/verify_captures.py sunset-evidence
+      - name: Capture the previous revision with the same cameras and times
+        run: |
+          Copy-Item -LiteralPath game/sunset/Main.cpp -Destination coastal-baseline/game/sunset/Main.cpp
+          cmake -S coastal-baseline -B build-baseline -G "Visual Studio 18 2026" -A x64 -DGAME_PROFILE=all -DBUILD_SUNSET_WALK=ON
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build-baseline --config Release --target sunset_walk --parallel 2
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & build-baseline/Release/SunsetWalk.exe --compare comparison-before
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & build-ci/Release/SunsetWalk.exe --compare comparison-after
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & build-ci/Release/SunsetWalk.exe --compare-aa comparison-ssaa
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B tools/sunset/compare_revisions.py comparison-before comparison-after comparison-ssaa sunset-evidence
       - name: Render the trailer and verify the MP4
         run: |
-          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
-            choco install ffmpeg --yes --no-progress
-            if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          }
           & build-ci/Release/SunsetWalk.exe --pv-frames pv-frames
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -B tools/sunset/build_pv.py pv-frames sunset-evidence
@@ -45,11 +67,13 @@ jobs:
             sunset-evidence/samples.csv
             sunset-evidence/results.json
             sunset-evidence/pv-results.json
+            sunset-evidence/revision-comparison.json
             sunset-evidence/Sunset-Resort-PV.mp4
             sunset-evidence/sunset-ambience.wav
             sunset-evidence/villa-music.wav
             build-ci/Release/SunsetWalk.exe
             build-ci/Release/shaders/*.dxil
+            build-ci/Release/coastal-assets/**
           if-no-files-found: error
           retention-days: 5
 
