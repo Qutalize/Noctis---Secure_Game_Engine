@@ -1,0 +1,30 @@
+{
+  "terrain_red_01": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/terrain_red_01/terrain_red_01_diff_1k.jpg",
+      "f3f3fa6ebcddce22ece1fc8a343b469cbf67faefafac453ba53bce1fa28fc4b0"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/terrain_red_01/terrain_red_01_nor_gl_1k.jpg",
+      "97b57469b655d40c2e4c39b7c5f8deb9cbaee2af16c0ee19cd85f435f48f1da6"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/terrain_red_01/terrain_red_01_arm_1k.jpg",
+      "e48b6015d7af7325f9f354b8f88bf5d1bbce4d31bf58746449f49f20a60b738f"
+    ]
+  },
+  "worn_asphalt": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/worn_asphalt/worn_asphalt_diff_1k.jpg",
+      "3bf71ad290730092ad2aee85e246b2e43318bc1f32261826ba91250e815b5f72"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/worn_asphalt/worn_asphalt_nor_gl_1k.jpg",
+      "5f835d192dac296674229a763553f356f5e206bb7f6d812bca5b0f38fc5302a4"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/worn_asphalt/worn_asphalt_arm_1k.jpg",
+      "df8f97e3739be52933907f92527c79aac7c3d0e6f7c76fa0ce709815bfd0fe51"
+    ]
+  }
+}

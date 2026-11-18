@@ -22,6 +22,10 @@
 | `coastal-assets/roof_09` | ヴィラの瓦屋根・PBR材質 | [Roof 09・Rob Tuytel](https://polyhaven.com/a/roof_09) | CC0 |
 | `coastal-assets/coast_sand_01` | 浜・砂底・ヴィラ外壁の粒状材質 | [Coast Sand 01・Rob Tuytel](https://polyhaven.com/a/coast_sand_01) | CC0 |
 | `coastal-assets/{pier,villa,ruins}` | glTF形状 | 個別の寸法と配置を `assets/models/coastal/architecture.json` から書き出した独自モデル | 独自制作 |
+| `desert-assets/terrain_red_01` | 赤土の材質 | [Terrain Red 01・Rob Tuytel](https://polyhaven.com/a/terrain_red_01) | CC0 |
+| `desert-assets/worn_asphalt` | 舗装路の材質 | [Worn Asphalt・Amal Kumar](https://polyhaven.com/a/worn_asphalt) | CC0 |
+| `desert-assets/rock_face_01` | 路肩の岩壁 | [Rock Face 01・Dario Barresi](https://polyhaven.com/a/rock_face_01) | CC0 |
+| `desert-assets/{road_corridor,sandstone_mesas,roadside}` | glTF形状 | `assets/models/desert/route.json` と `tools/sunset/build_desert.py` で制作した独自モデル | 独自制作 |
 
 海岸デモの3モデルは `tools/sunset/coastal-assets.json` に固定した配布元から取得する。既存のローダー向けにJPEGをPNGへ変換し、吊り灯りの透過ガラス面は省いてフレームとランプを使用する。
 

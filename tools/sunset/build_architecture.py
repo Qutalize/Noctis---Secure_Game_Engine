@@ -72,15 +72,15 @@ class Model:
             following = (side+1) % sides
             self.face(kind, [rings[0][side],rings[1][side],rings[1][following],rings[0][following]])
 
-    def write(self, root, name):
+    def write(self, root, name, colors=MATERIALS, textured=(WOOD, STONE, TILE, PLASTER)):
         output = root / name
         output.mkdir(parents=True, exist_ok=True)
         paths, textures, materials, primitives, views, accessors = [], [], [], [], [], []
         payload = bytearray()
         for kind, vertices in self.parts.items():
             material = {"name": kind, "pbrMetallicRoughness": {
-                "baseColorFactor": MATERIALS[kind], "metallicFactor": 0., "roughnessFactor": .78}}
-            if kind in (WOOD, STONE, TILE, PLASTER):
+                "baseColorFactor": colors[kind], "metallicFactor": 0., "roughnessFactor": .78}}
+            if kind in textured:
                 start = len(paths)
                 for channel in ("diff","nor_gl","arm"):
                     paths.append({"uri": f"../{kind}/{channel}.png"})

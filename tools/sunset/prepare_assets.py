@@ -1,17 +1,24 @@
 """Materialize a pinned Poly Haven CC0 inventory for the coastal demo."""
 import hashlib
+import argparse
 import json
 from pathlib import Path
 import subprocess
-import sys
 import urllib.request
 
 from build_architecture import build_architecture
+from build_desert import build_desert
 
 
-def prepare(output):
-    inventory = json.loads(Path(__file__).with_name("coastal-assets.json").read_text(encoding="utf-8"))
-    inventory.update(json.loads(Path(__file__).with_name("architecture-materials.json").read_text(encoding="utf-8")))
+def prepare(output, desert=False):
+    def manifest(filename):
+        return json.loads(Path(__file__).with_name(filename).read_text(encoding="utf-8"))
+
+    coastal = manifest("coastal-assets.json")
+    if desert:
+        inventory = {"rock_face_01": coastal["rock_face_01"], **manifest("desert-materials.json")}
+    else:
+        inventory = {**coastal, **manifest("architecture-materials.json")}
     for model, files in inventory.items():
         directory = output / model
         for name, (url, expected) in files.items():
@@ -41,8 +48,15 @@ def prepare(output):
             else:
                 target.write_bytes(original)
         print(f"Verified CC0 asset: {model} ({len(files)} source files)")
-    build_architecture(output)
+    if desert:
+        build_desert(output)
+    else:
+        build_architecture(output)
 
 
 if __name__ == "__main__":
-    prepare(Path(sys.argv[1]))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("output", type=Path)
+    parser.add_argument("--desert", action="store_true")
+    args = parser.parse_args()
+    prepare(args.output, args.desert)

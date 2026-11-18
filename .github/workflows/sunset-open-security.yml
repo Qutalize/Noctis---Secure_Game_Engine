@@ -92,6 +92,42 @@ jobs:
           if-no-files-found: error
           retention-days: 5
 
+  desert-road:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build the native desert demo
+        run: |
+          cmake -S . -B desert-ci -G "Visual Studio 18 2026" -A x64 -DGAME_PROFILE=all -DBUILD_SUNSET_WALK=ON
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build desert-ci --config Release --target desert_road --parallel 2
+      - name: Prepare the desert glTF and CC0 materials
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          python -B tools/sunset/prepare_assets.py desert-ci/Release/desert-assets --desert
+      - name: Validate the road and render the three cuts with WARP MSAA
+        run: |
+          & desert-ci/Release/DesertRoad.exe --self-test
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & desert-ci/Release/DesertRoad.exe --capture desert-frames
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B tools/sunset/build_desert_pv.py desert-frames desert-evidence
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desert-road
+          path: |
+            desert-evidence/**
+            desert-ci/Release/DesertRoad.exe
+            desert-ci/Release/desert-assets/**
+            desert-ci/Release/shaders/*.dxil
+            assets/CREDITS.md
+          if-no-files-found: error
+          retention-days: 5
+
   open-security:
     runs-on: windows-2025
     timeout-minutes: 20

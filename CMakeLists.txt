@@ -376,6 +376,13 @@ if (DXC_EXE)
         add_custom_command(TARGET sunset_walk POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
                     "${SHADER_BIN_DIR}" "$<TARGET_FILE_DIR:sunset_walk>/shaders")
+        add_executable(desert_road game/desert/Main.cpp game/desert/DesertScene.cpp game/GltfProp.cpp)
+        target_link_libraries(desert_road PRIVATE engine)
+        set_target_properties(desert_road PROPERTIES OUTPUT_NAME DesertRoad)
+        add_dependencies(desert_road shaders)
+        add_custom_command(TARGET desert_road POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${SHADER_BIN_DIR}" "$<TARGET_FILE_DIR:desert_road>/shaders")
     endif()
 else()
     if(BUILD_SUNSET_WALK)

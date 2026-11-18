@@ -252,7 +252,7 @@ public:
 
     // 1 フレームの描画手順:
     //   BeginFrame(camera) → DrawMesh(...) を必要回数 → EndFrame()
-    void BeginFrame(const Camera& camera);
+    void BeginFrame(const Camera& camera, float verticalFovDegrees = 70.f);
 #if ENGINE_MODEL_ANIMATION
     unsigned FrameSlot() const { return m_frameIndex; }
 #endif

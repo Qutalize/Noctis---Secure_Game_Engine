@@ -1330,11 +1330,11 @@ void Renderer::DrawOverlay(const Mesh& mesh) {
                DepthMode::Disabled, nullptr, /*isEnemy=*/false);
 }
 
-void Renderer::BeginFrame(const Camera& camera) {
+void Renderer::BeginFrame(const Camera& camera, float verticalFovDegrees) {
     // 行列を確定（DrawMesh で使う）
     const float aspect = static_cast<float>(m_width) / static_cast<float>(m_height);
     m_viewMatrix = camera.GetViewMatrix();
-    m_projMatrix = camera.GetProjMatrix(XMConvertToRadians(70.0f), aspect, 0.1f, 500.0f);
+    m_projMatrix = camera.GetProjMatrix(XMConvertToRadians(verticalFovDegrees), aspect, 0.1f, 500.0f);
     m_cameraPos  = camera.GetPosition(); // スペキュラ計算用に視点位置を保持
 
     // J-04: フレーム鍵を更新（xorshift32）。非0 を保証して「マスク==素の値」を避ける。
