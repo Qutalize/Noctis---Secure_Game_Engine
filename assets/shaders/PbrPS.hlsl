@@ -120,12 +120,12 @@ float4 PSMain(PSInput input) : SV_Target
 {
     if (gWaterParams.x > 0.5f) {
         const float time = gWaterParams.y;
-        const float2 point = input.worldPos.xz;
-        const float3 wave = WaveSurface(point, time);
+        const float2 seaPosition = input.worldPos.xz;
+        const float3 wave = WaveSurface(seaPosition, time);
         const float fade = 1.0f - smoothstep(10.0f, 55.0f, length(gCameraPos.xyz - input.worldPos));
-        const float2 drift = float2(sin(dot(point, float2(1.27f, 0.93f)) + time * 0.51f),
-                                    sin(dot(point, float2(-0.89f, 1.14f)) - time * 0.43f));
-        const float2 ripple = 0.065f * fade * sin(point * float2(9.0f, 14.0f) +
+        const float2 drift = float2(sin(dot(seaPosition, float2(1.27f, 0.93f)) + time * 0.51f),
+                                    sin(dot(seaPosition, float2(-0.89f, 1.14f)) - time * 0.43f));
+        const float2 ripple = 0.065f * fade * sin(seaPosition * float2(9.0f, 14.0f) +
             drift.yx * 2.3f + time * float2(2.6f, -3.3f));
         const float2 slope = wave.yz + ripple;
         const float3 normal = normalize(float3(-slope.x, 1.0f, -slope.y));
@@ -137,14 +137,14 @@ float4 PSMain(PSInput input) : SV_Target
         const float3 sky = lerp(float3(0.70f, 0.39f, 0.30f),
                                 float3(0.16f, 0.30f, 0.53f), elevation);
         const float alignment = saturate(dot(reflected, sun));
-        const float sparkle = 0.65f + 0.35f * sin(dot(point, float2(7.13f, 11.39f)) +
+        const float sparkle = 0.65f + 0.35f * sin(dot(seaPosition, float2(7.13f, 11.39f)) +
             2.2f * drift.x + time * 1.3f);
         const float glint = pow(alignment, 52.0f) * 0.33f +
             pow(alignment, 230.0f) * (1.1f + fade * sparkle);
-        const float2 pier = abs(point - float2(0.0f, 3.0f)) - float2(3.06f, 13.0f);
-        const float2 lodge = abs(point - float2(7.60f, 2.0f)) - float2(4.50f, 7.0f);
+        const float2 pier = abs(seaPosition - float2(0.0f, 3.0f)) - float2(3.06f, 13.0f);
+        const float2 lodge = abs(seaPosition - float2(7.60f, 2.0f)) - float2(4.50f, 7.0f);
         const float coast = min(length(max(pier, 0.0f)), length(max(lodge, 0.0f)));
-        const float foamPulse = sin(point.x * 4.1f - point.y * 2.4f + time * 2.1f + 2.0f * drift.x);
+        const float foamPulse = sin(seaPosition.x * 4.1f - seaPosition.y * 2.4f + time * 2.1f + 2.0f * drift.x);
         const float wash = (1.0f - smoothstep(0.12f, 1.08f, coast)) *
             smoothstep(0.12f, 0.88f, foamPulse);
         const float crest = smoothstep(0.139f, 0.213f, wave.x) * fade *
