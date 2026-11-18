@@ -275,4 +275,8 @@ FBXのビルド時変換にはufbx 0.23.1を使用します。ソース・ライ
 | 建屋の屋根、タンク | [Corrugated Iron](https://polyhaven.com/a/corrugated_iron) | Dimitrios Savva、Jenelle van Heerden |
 | 外壁、煙突、配管 | [Rusty Corrugated Iron](https://polyhaven.com/a/rusty_corrugated_iron) | Charlotte Baglioni |
 
-写真素材の配布元 URL と SHA-256 は `tools/sunset/inland-materials.json` と `tools/sunset/architecture-materials.json` に記録。
+草原と雨の森の改訂では、[Leafy Grass](https://polyhaven.com/a/leafy_grass)、[Grass Medium 01](https://polyhaven.com/a/grass_medium_01)、[Forest Ground 04](https://polyhaven.com/a/forest_ground_04)、[Rocky Trail](https://polyhaven.com/a/rocky_trail)、[Pine Bark](https://polyhaven.com/a/pine_bark)、[Pine Sapling Medium](https://polyhaven.com/a/pine_sapling_medium) の Poly Haven CC0 写真材質を使用。樹形とアトラスを載せる面の制作元は `tools/sunset/build_landscape.py`。旧湿地の写真材質は初版の記録向け。
+
+荒野の休憩所と内陸・海岸の人物は Innerscene の MakeHuman 由来CC0モデル。[Taylor](https://www.innerscene.com/tools/library/3d-parts/placing-an-item-ahead-3d-person-everyday-tasks-3904157a) · [Sage](https://www.innerscene.com/tools/library/3d-parts/sage-3d-person-woman-walking-a458e4c3) · [Micah、Taylor、Quinn](https://www.innerscene.com/tools/library/3d-parts/micah-taylor-and-quinn-3d-person-three-colleagues-talking-4bdae510)
+
+配布元と SHA-256 は `tools/sunset/landscape-materials.json`、`tools/sunset/inland-materials.json`、`tools/sunset/people-assets.json` に記録。人物は配布元のポーズを使い、画像を512px以下に縮小した。

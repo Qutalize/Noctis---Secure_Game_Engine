@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/renderer/Renderer.h"
 #include "game/GltfProp.h"
+#include "game/ScenicPeople.h"
 #include <cstddef>
 
 namespace sunset {
@@ -24,6 +25,7 @@ private:
     Mesh m_islands;
     Mesh m_ruinIsland;
     Mesh m_shore;
+    Mesh m_promenade;
     GltfProp m_ruins;
     GltfProp m_boardwalk;
     GltfProp m_villa;
@@ -41,6 +43,8 @@ private:
     Mesh m_boat;
     Mesh m_leftWing;
     Mesh m_rightWing;
+    ScenicPeople m_guest;
+    ScenicPeople m_diners;
     Buildings m_simple;
     Buildings m_detailed;
 };

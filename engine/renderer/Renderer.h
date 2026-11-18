@@ -124,6 +124,7 @@ struct alignas(256) SceneConstants {
     DirectX::XMFLOAT4   accentLight;
     DirectX::XMFLOAT4   rearLight;
     DirectX::XMFLOAT4   coastalHaze;
+    DirectX::XMFLOAT4   scenicWeather;   // x=雨の強さ, y=経過秒, z=雨粒の画面スケール
 };
 static_assert(sizeof(SceneConstants) == 512);
 
@@ -252,7 +253,7 @@ public:
 
     // 1 フレームの描画手順:
     //   BeginFrame(camera) → DrawMesh(...) を必要回数 → EndFrame()
-    void BeginFrame(const Camera& camera, float verticalFovDegrees = 70.f);
+    void BeginFrame(const Camera& camera, float verticalFovDegrees = 70.f, float farDistance = 500.f);
 #if ENGINE_MODEL_ANIMATION
     unsigned FrameSlot() const { return m_frameIndex; }
 #endif
@@ -372,6 +373,10 @@ public:
     }
     void SetCoastalHaze(const DirectX::XMFLOAT3& color, float density) {
         m_coastalHaze = {color.x, color.y, color.z, density};
+    }
+    void SetScenicRain(float strength, float time) {
+        const float pixelScale = m_height > 0 ? 540.f / static_cast<float>(m_height) : 1.f;
+        m_scenicWeather = {strength, time, pixelScale, 0.f};
     }
 
     // 画面の横/縦比（2D オーバーレイのアスペクト補正に使う）。
@@ -700,6 +705,7 @@ private:
     DirectX::XMFLOAT4 m_accentLight{};
     DirectX::XMFLOAT4 m_rearLight{};
     DirectX::XMFLOAT4 m_coastalHaze{};
+    DirectX::XMFLOAT4 m_scenicWeather{};
     DirectX::XMFLOAT3 m_cameraPos{ 0.0f, 0.0f, 0.0f };          // BeginFrame で更新
 
     bool m_initialized = false;

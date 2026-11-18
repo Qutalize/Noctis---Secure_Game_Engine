@@ -34,8 +34,8 @@ void SelfTest(const desert::Route& route) {
         const auto previous = route.At(position.y);
         const auto current = route.At(next.y);
         if (next.y - position.y != .25f || std::abs(next.x - current.x - inland::kWalkHalfWidth) > .001f ||
-            std::abs(current.y - previous.y) > .05f || current.y < .57f) {
-            throw std::runtime_error("Invalid footpath or boardwalk");
+            std::abs(current.y - previous.y) > .05f || current.y < 1.f) {
+            throw std::runtime_error("Invalid inland trail");
         }
         position = next;
     }
@@ -49,7 +49,7 @@ void SelfTest(const desert::Route& route) {
             throw std::runtime_error("Invalid inland camera");
         }
     }
-    std::puts("Inland checks passed: 800 walking steps, boundaries and 288 camera positions");
+    std::puts("Inland checks passed: 3920 walking steps, boundaries and 288 camera positions");
 }
 
 void RequirePbr(const Renderer& renderer) {
@@ -116,7 +116,7 @@ int Play() {
         const bool tab = input.IsKeyDown(VK_TAB);
         if (tab && !tabHeld) input.SetCursorLock(!input.IsCursorLocked(), window.GetHandle());
         tabHeld = tab;
-        constexpr float stations[]{-13.f, 62.f, 115.f};
+        constexpr float stations[]{inland::kGrassStation, inland::kForestStation, inland::kFactoryStation};
         for (int index = 0; index < static_cast<int>(std::size(stations)); ++index) {
             if (input.IsKeyDown('1' + index)) {
                 const float z = stations[index];
@@ -141,8 +141,9 @@ int Play() {
         Camera camera;
         camera.SetPosition({position.x, route.At(position.y).y + kEyeHeight, position.y});
         camera.SetRotation(yaw, pitch);
-        const float dusk = std::lerp(.20f, .86f, std::clamp((position.y - 28.f) / 94.f, 0.f, 1.f));
-        scene.Draw(renderer, {camera, 57.f, dusk}, time);
+        const float dusk = std::lerp(.14f, .86f, std::clamp((position.y - 213.f) / 422.f, 0.f, 1.f));
+        const float rain = std::clamp(std::min((position.y - 254.f) / 39.f, (622.f - position.y) / 40.f), 0.f, 1.f);
+        scene.Draw(renderer, {camera, 57.f, dusk, rain}, time);
         renderer.EndFrame();
     }
     input.SetCursorLock(false, window.GetHandle());

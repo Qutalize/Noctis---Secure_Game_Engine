@@ -66,8 +66,8 @@ void SelfTest(const desert::Route& route) {
     if (std::abs(middle.x-1.55f)>.001f || std::abs(middle.y-.565f)>.001f) {
         throw std::runtime_error("Road interpolation failed");
     }
-    auto end=route.Step({0.f,300.f},{50.f,120.f});
-    if (end.y!=375.f || std::abs(end.x-route.At(end.y).x-4.62f)>.001f) {
+    auto end=route.Step({0.f,800.f},{80.f,120.f});
+    if (end.y!=desert::kRoadWalkEnd || std::abs(end.x-route.At(end.y).x-4.62f)>.001f) {
         throw std::runtime_error("Walking corridor boundary failed");
     }
     for (int frame=0; frame<kSeconds*kFrameRate; ++frame) {

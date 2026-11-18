@@ -1,10 +1,12 @@
 #pragma once
 
 #include "game/GltfProp.h"
+#include "game/ScenicPeople.h"
 
 #include <filesystem>
 
 namespace desert {
+inline constexpr float kRoadWalkEnd = 861.f;
 class Route {
 public:
     explicit Route(const std::filesystem::path& file);
@@ -28,6 +30,7 @@ private:
     GltfProp m_mesas;
     GltfProp m_props;
     GltfProp m_rock;
+    ScenicPeople m_roadsidePerson;
     Mesh m_sky;
     PbrMaterial m_skyMaterial;
 };

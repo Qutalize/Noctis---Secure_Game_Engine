@@ -30,16 +30,15 @@ Shot ComposeShot(const desert::Route& route, float time) {
     const float phase = std::fmod(std::clamp(time, 0.f, 11.999f), 4.f) * .25f;
     const float travel = phase * phase * (3.f - 2.f * phase);
     if (time < 4.f) {
-        const auto eye = route.Point(-13.f + 14.f * travel, 9.f - 6.f * travel, 5.2f - 2.4f * travel);
-        return {LookAt(eye, route.Point(21.f + 8.f * travel, -10.f + 4.f * travel, .6f)), 43.f, .16f};
+        const auto eye = route.Point(-11.f + 40.f * travel, -11.f + 13.f * travel, 7.2f - 4.3f * travel);
+        return {LookAt(eye, route.Point(75.f + 32.f * travel, -15.f + 7.f * travel, -1.3f)), 54.f, .14f, 0.f};
     }
     if (time < 8.f) {
-        const auto eye = route.Point(58.f + 15.f * travel, -11.6f + 7.5f * travel,
-                                     2.9f - 1.8f * travel + .32f * std::sin(phase * 3.14f));
-        return {LookAt(eye, route.Point(84.f + 11.f * travel, 5.f + 2.f * travel, .20f)), 48.f, .39f};
+        const auto eye = route.Point(374.f + 18.f * travel, -1.35f + 2.8f * travel, 1.72f + .46f * travel);
+        return {LookAt(eye, route.Point(405.f + 18.f * travel, 5.2f - 4.4f * travel, 3.3f)), 47.f, .31f, 1.f};
     }
-    const auto eye = route.Point(113.f + 14.5f * travel, 1.9f + 2.1f * travel, 2.35f + 1.5f * travel);
-    return {LookAt(eye, route.Point(153.f + 7.f * travel, -9.f - 4.f * travel, 5.2f)), 43.f, .84f};
+    const auto eye = route.Point(627.f + 26.f * travel, 2.6f + 1.2f * travel, 1.6f + 3.3f * travel);
+    return {LookAt(eye, route.Point(700.f + 32.f * travel, 1.4f - 7.f * travel, 9.2f)), 44.f, .84f, 0.f};
 }
 
 Scene::Scene(Renderer& renderer, const std::filesystem::path& assets) : m_route(assets / "route.json") {
@@ -50,16 +49,22 @@ Scene::Scene(Renderer& renderer, const std::filesystem::path& assets) : m_route(
         }
     };
     load(m_ground, "inland_ground");
-    load(m_path, "inland_path");
     load(m_grass, "inland_grasses");
-    load(m_water, "inland_water");
+    load(m_trees, "inland_trees");
+    load(m_canopy, "inland_canopy");
+    load(m_shelter, "inland_shelter");
     load(m_yard, "inland_yard");
     load(m_lamps, "inland_lamps");
     load(m_sky, "inland_sky");
+    m_canopy.SetScenicEffect({-5.f, 0.f, 0.f, 0.f});
+    m_ground.SetScenicEffect({-4.f, 0.f, 0.f, 0.f});
+    m_traveler.Load(renderer, assets, "sage");
+    m_crew.Load(renderer, assets, "colleagues");
 }
 
 void Scene::Draw(Renderer& renderer, const Shot& shot, float time) {
     const float dusk = shot.dusk;
+    const float rain = shot.rain;
     const float elevation = std::lerp(.54f, .027f, dusk);
     const float azimuth = std::lerp(-1.10f, -.43f, dusk);
     const XMFLOAT3 sun{std::sin(azimuth) * std::cos(elevation), std::sin(elevation),
@@ -68,26 +73,33 @@ void Scene::Draw(Renderer& renderer, const Shot& shot, float time) {
     const float night = std::lerp(0.f, .58f, dusk * dusk);
     const float lamps = std::clamp((dusk - .34f) * 1.9f, 0.f, 1.f);
     renderer.SetFog(false);
-    renderer.SetDirectionalLight({-sun.x, -sun.y, -sun.z}, {1.f, .80f, .59f},
-                                 std::lerp(1.82f, .55f, dusk), {.49f, .55f, .64f});
-    renderer.SetCoastalHaze({.45f, .50f, .55f}, .00175f);
-    renderer.SetShadowExtent(52.f);
-    renderer.SetWarmFillLight({-4.1f, 4.85f, 115.f}, lamps * 13.9f);
-    renderer.SetWarmAccentLights({-4.1f, 4.85f, 144.f, lamps * 12.f}, {6.7f, 4.85f, 144.f, lamps * 12.f});
-    renderer.BeginFrame(shot.camera, shot.fieldOfView);
+    renderer.SetDirectionalLight({-sun.x, -sun.y, -sun.z}, {1.f, std::lerp(.86f,.97f,rain), std::lerp(.68f,1.f,rain)},
+                                 std::lerp(std::lerp(2.8f, .59f, dusk), .24f, rain),
+                                 {std::lerp(.66f,.31f,rain),std::lerp(.72f,.39f,rain),std::lerp(.73f,.43f,rain)});
+    renderer.SetCoastalHaze({std::lerp(.52f,.32f,rain), std::lerp(.60f,.40f,rain), std::lerp(.68f,.44f,rain)},
+                            std::lerp(.00142f,.024f,rain));
+    renderer.SetScenicRain(rain, time);
+    renderer.SetShadowExtent(78.f);
+    renderer.SetWarmFillLight({-4.1f, 4.85f, 635.f}, lamps * 13.9f);
+    renderer.SetWarmAccentLights({-4.1f, 4.85f, 664.f, lamps * 12.f}, {6.7f, 4.85f, 664.f, lamps * 12.f});
+    renderer.BeginFrame(shot.camera, shot.fieldOfView, 1500.f);
 
     const auto& eye = shot.camera.GetPosition();
     m_sky.SetScenicEffect({2.f, time, afterglow, night});
     m_grass.SetScenicEffect({-3.f, time, 0.f, 0.f});
-    m_water.SetScenicEffect({4.f, time, afterglow, night});
     m_lamps.SetScenicEffect({3.f, time, 0.f, lamps});
     m_sky.Draw(renderer, XMMatrixTranslation(eye.x, eye.y, eye.z), true);
     const auto identity = XMMatrixIdentity();
     m_ground.Draw(renderer, identity);
-    m_water.Draw(renderer, identity);
-    m_path.Draw(renderer, identity);
     m_grass.Draw(renderer, identity);
+    m_trees.Draw(renderer, identity);
+    m_canopy.Draw(renderer, identity);
+    m_shelter.Draw(renderer, identity);
     m_yard.Draw(renderer, identity);
     m_lamps.Draw(renderer, identity);
+    m_traveler.Draw(renderer, shot.camera, m_route.Point(46.f, .65f, -.025f), .36f);
+    m_traveler.Draw(renderer, shot.camera, m_route.Point(404.f, 1.2f, -.025f), .48f);
+    m_crew.Draw(renderer, shot.camera, {-1.7f, 1.015f, 660.f}, -.32f);
+    m_crew.Draw(renderer, shot.camera, {15.2f, 1.015f, 754.f}, .58f);
 }
 }

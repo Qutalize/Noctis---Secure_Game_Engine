@@ -69,19 +69,20 @@ Mesh Sky(Renderer& renderer) {
 Mesh Islands(Renderer& renderer) {
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
-    for (int layer = 0; layer < 2; ++layer) {
+    for (int layer = 0; layer < 4; ++layer) {
         constexpr int samples = 100;
         const auto start = static_cast<uint32_t>(vertices.size());
         const XMFLOAT4 color = layer == 0 ? XMFLOAT4{.44f, .47f, .54f, 1.f}
                                           : XMFLOAT4{.39f, .43f, .50f, 1.f};
+        const float lateralScale = layer < 2 ? 1.f : (layer == 2 ? 4.3f : 7.4f);
         for (int i = 0; i <= samples; ++i) {
             const float x = Mix(-120.f, 120.f, static_cast<float>(i) / samples);
             const float envelope = std::exp(-std::pow((x + 47.f - layer * 10.f) / 29.f, 2.f)) +
                                    .5f * std::exp(-std::pow((x - 83.f) / 14.f, 2.f));
-            const float top = envelope * (2.2f + 6.f * Pattern(x * .013f, layer * .3f)) - 1.4f;
-            const float z = 235.f - layer * 24.f;
-            vertices.push_back({{x, -2.f, z}, {0, 1, 0}, color});
-            vertices.push_back({{x, top, z}, {0, 1, 0}, color});
+            const float top = envelope * (2.2f + 6.f * Pattern(x * .013f, layer * .3f)) * lateralScale - 1.4f;
+            const float z = layer < 2 ? 235.f - layer * 24.f : (layer == 2 ? 440.f : 728.f);
+            vertices.push_back({{x * lateralScale, -2.f, z}, {0, 1, 0}, color});
+            vertices.push_back({{x * lateralScale, top, z}, {0, 1, 0}, color});
             if (i < samples) {
                 const auto base = start + static_cast<uint32_t>(2 * i);
                 indices.insert(indices.end(), {base, base + 1, base + 2, base + 2, base + 1, base + 3});
@@ -228,10 +229,14 @@ MeshData Harbor(bool detailed) {
 Mesh SeaGrid(Renderer& renderer) {
     std::vector<float> columns;
     std::vector<float> rows;
-    for (float x = -309.f; x < 309.f; x += std::abs(x) > 34.f ? 5.f : .30f) columns.push_back(x);
-    columns.push_back(309.f);
-    for (float z = -58.f; z < 309.f; z += z < -18.f || z > 44.f ? 4.f : .30f) rows.push_back(z);
-    rows.push_back(309.f);
+    for (float x = -899.f; x < 899.f; x += std::abs(x) > 149.f ? 17.f : (std::abs(x) > 34.f ? 5.f : .30f)) {
+        columns.push_back(x);
+    }
+    columns.push_back(899.f);
+    for (float z = -70.f; z < 899.f; z += z > 155.f ? 17.f : (z < -18.f || z > 44.f ? 4.f : .30f)) {
+        rows.push_back(z);
+    }
+    rows.push_back(899.f);
     std::vector<PbrVertex> vertices;
     std::vector<uint32_t> indices;
     const auto stride = static_cast<uint32_t>(columns.size());
@@ -384,7 +389,7 @@ Texture LoadCoastalMap(Renderer& renderer, const std::filesystem::path& path) {
 
 Mesh Foreshore(Renderer& renderer) {
     MeshData mesh;
-    for (int strip = -55; strip < 55; ++strip) {
+    for (int strip = -100; strip < 100; ++strip) {
         const float left = static_cast<float>(strip);
         const float right = left + 1.f;
         for (int band = 0; band < 22; ++band) {
@@ -398,6 +403,22 @@ Mesh Foreshore(Renderer& renderer) {
         vertex.uv = {vertex.position.x / 3.2f, vertex.position.z / 3.2f};
     }
     return renderer.CreatePbrMesh(mesh.vertices, mesh.indices);
+}
+
+Mesh Promenade(Renderer& renderer) {
+    ColoredMesh mesh;
+    constexpr XMFLOAT4 wood{.33f, .26f, .17f, 1.f}, rail{.45f, .36f, .25f, 1.f};
+    for (int row = 0; row < 163; ++row) {
+        const float x = -26.f + static_cast<float>(row) * .32f;
+        mesh.Box(x, -.10f, -12.7f, .315f, .11f, 3.02f, wood);
+        if (row % 8 == 0 && std::abs(x) > 3.42f) {
+            mesh.Box(x, -.76f, -10.05f, .12f, 1.57f, .11f, rail);
+            if (row + 8 < 163 && std::abs(x + 2.56f) > 3.42f) {
+                mesh.Box(x, .74f, -10.02f, 2.56f, .065f, .059f, rail);
+            }
+        }
+    }
+    return mesh.Upload(renderer);
 }
 
 Mesh RuinIsland(Renderer& renderer) {
@@ -552,6 +573,9 @@ Scene::Scene(Renderer& renderer) {
     m_ruinIsland = RuinIsland(renderer);
     m_shore = Shore(renderer);
     m_foreshore = Foreshore(renderer);
+    m_promenade = Promenade(renderer);
+    m_guest.Load(renderer, models, "sage");
+    m_diners.Load(renderer, models, "colleagues");
     const auto sand = models / "coast_sand_01";
     const auto sandColor = LoadCoastalMap(renderer, sand / "diff.png");
     const auto sandNormal = LoadCoastalMap(renderer, sand / "nor_gl.png");
@@ -618,7 +642,7 @@ void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float 
     renderer.SetWarmAccentLights({3.46f, 2.98f, 24.8f, 1.44f * dusk},
                                  {.3f, 2.78f, 27.0f, 1.19f * dusk});
     renderer.SetShadowExtent(42.f);
-    renderer.BeginFrame(camera);
+    renderer.BeginFrame(camera, 70.f, 1200.f);
     m_skyMaterial.coastalParams = {2.f, time, sunset, dusk};
     const auto& eye = camera.GetPosition();
     renderer.DrawPbrMesh(m_sky, m_skyMaterial, XMMatrixTranslation(eye.x, eye.y, eye.z), true);
@@ -638,6 +662,7 @@ void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float 
     m_waterMaterial.coastalParams = {1.f, time, sunset, dusk};
     renderer.DrawPbrMesh(m_water, m_waterMaterial, identity);
     m_boardwalk.Draw(renderer, identity);
+    renderer.DrawMesh(m_promenade, identity);
     renderer.DrawMesh(m_restaurant, identity);
     for (const float side : {-1.f, 1.f}) {
         for (const float z : {21.9f, 24.8f, 27.25f}) {
@@ -654,6 +679,12 @@ void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float 
     renderer.DrawPbrMesh(buildings.geometry, buildings.material, identity);
     renderer.DrawMesh(m_resort, identity);
     m_villa.Draw(renderer, identity);
+    m_guest.Draw(renderer, camera, {1.52f, .02f, -4.65f}, .72f);
+    m_guest.Draw(renderer, camera, {-10.2f, .02f, -2.37f}, -1.42f);
+    m_guest.Draw(renderer, camera, {5.7f, .02f, 4.4f}, -1.34f);
+    m_guest.Draw(renderer, camera, {-19.2f, .01f, -11.15f}, 1.22f);
+    m_diners.Draw(renderer, camera, {1.52f, .06f, 25.15f}, -.75f);
+    m_diners.Draw(renderer, camera, {14.2f, .01f, -11.38f}, .63f);
     const float sailAngle = time * .13f;
     const auto boat = XMMatrixRotationZ(.12f * std::sin(1.7f * time)) * XMMatrixRotationY(sailAngle + .55f) *
         XMMatrixTranslation(-10.1f + 4.7f * std::sin(sailAngle), -.55f + .14f * std::sin(time * 1.47f),

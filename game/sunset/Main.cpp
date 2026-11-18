@@ -59,7 +59,8 @@ struct Walk {
             const bool fishing = x >= -13.38f && x <= -2.55f && z >= -3.42f && z <= -1.33f;
             const bool restaurant = x >= -5.14f && x <= 5.14f && z >= 18.94f && z <= 27.9f;
             const bool villaDeck = x >= 2.55f && x <= 6.7f && z >= -4.20f && z <= 8.35f;
-            return pier || fishing || restaurant || villaDeck;
+            const bool promenade = x >= -25.7f && x <= 25.7f && z >= -12.64f && z <= -9.87f;
+            return pier || fishing || restaurant || villaDeck || promenade;
         };
         if (walkable(next.x, center.z)) center.x = next.x;
         if (walkable(center.x, next.z)) center.z = next.z;

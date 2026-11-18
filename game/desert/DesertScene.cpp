@@ -75,7 +75,7 @@ XMFLOAT3 Route::Point(float distance,float offset,float height) const {
 }
 
 XMFLOAT2 Route::Step(XMFLOAT2 position,XMFLOAT2 delta) const {
-    const float distance=std::clamp(position.y+delta.y,-29.f,375.f);
+    const float distance=std::clamp(position.y+delta.y,-29.f,kRoadWalkEnd);
     const float axis=At(distance).x;
     return {std::clamp(position.x+delta.x,axis-4.62f,axis+4.62f),distance};
 }
@@ -91,6 +91,7 @@ Scene::Scene(Renderer& renderer,const std::filesystem::path& assets) : m_route(a
     load(m_mesas,"sandstone_mesas");
     load(m_props,"roadside");
     load(m_rock,"rock_face_01");
+    m_roadsidePerson.Load(renderer, assets, "taylor");
     m_sky=Sky(renderer);
     m_skyMaterial=renderer.CreatePbrMaterial(nullptr,nullptr,nullptr);
 }
@@ -103,7 +104,7 @@ void Scene::Draw(Renderer& renderer,const Camera& camera,float time,float evenin
     renderer.SetCoastalHaze({.64f,.55f,.47f},.00145f);
     renderer.SetDirectionalLight({-sun.x,-sun.y,-sun.z},{1.f,.74f,.46f},1.55f,{.61f,.56f,.50f});
     renderer.SetShadowExtent(86.f);
-    renderer.BeginFrame(camera,verticalFov);
+    renderer.BeginFrame(camera,verticalFov,1400.f);
     const auto& eye=camera.GetPosition();
     m_skyMaterial.coastalParams={2.f,time,std::lerp(.18f,.69f,evening),0.f};
     renderer.DrawPbrMesh(m_sky,m_skyMaterial,XMMatrixTranslation(eye.x,eye.y,eye.z),true);
@@ -111,6 +112,8 @@ void Scene::Draw(Renderer& renderer,const Camera& camera,float time,float evenin
     m_ground.Draw(renderer,identity);
     m_mesas.Draw(renderer,identity);
     m_props.Draw(renderer,identity);
+    m_roadsidePerson.Draw(renderer, camera, m_route.Point(51.7f, 9.45f, .25f), -.2f);
+    m_roadsidePerson.Draw(renderer, camera, m_route.Point(49.7f, 7.03f, .02f), 1.92f);
     for (const auto& placement : {std::array{-17.3f,37.f,1.50f,.28f},std::array{14.8f,62.f,1.30f,-1.2f},
              std::array{-22.5f,90.f,2.2f,.65f},std::array{16.5f,104.f,1.36f,.20f},
              std::array{-20.4f,144.f,1.65f,-.22f},std::array{13.6f,181.f,2.1f,.43f}}) {

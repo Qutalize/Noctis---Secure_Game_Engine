@@ -9,6 +9,7 @@ import urllib.request
 from build_architecture import build_architecture
 from build_desert import build_desert
 from build_inland import build_inland
+from prepare_people import convert_figure
 
 
 def prepare(output, desert=False, inland=False):
@@ -17,8 +18,8 @@ def prepare(output, desert=False, inland=False):
 
     coastal = manifest("coastal-assets.json")
     if inland:
-        inventory = {"wood_planks_grey": manifest("architecture-materials.json")["wood_planks_grey"],
-                     **manifest("inland-materials.json")}
+        inventory = {**manifest("inland-materials.json"), **manifest("landscape-materials.json")}
+        inventory.pop("sparse_grass")
     elif desert:
         architecture = manifest("architecture-materials.json")
         inventory = {"rock_face_01": coastal["rock_face_01"],
@@ -26,14 +27,18 @@ def prepare(output, desert=False, inland=False):
                      **manifest("desert-materials.json")}
     else:
         inventory = {**coastal, **manifest("architecture-materials.json")}
+    def verified(url, expected):
+        request = urllib.request.Request(url, headers={"User-Agent": "Noctis scenery asset build"})
+        with urllib.request.urlopen(request, timeout=60) as response:
+            original = response.read()
+        if hashlib.sha256(original).hexdigest() != expected:
+            raise ValueError(f"Upstream asset content changed: {url}")
+        return original
+
     for model, files in inventory.items():
         directory = output / model
         for name, (url, expected) in files.items():
-            request = urllib.request.Request(url, headers={"User-Agent": "Noctis coastal asset build"})
-            with urllib.request.urlopen(request, timeout=40) as response:
-                original = response.read()
-            if hashlib.sha256(original).hexdigest() != expected:
-                raise ValueError(f"Upstream asset content changed: {model}/{name}")
+            original = verified(url, expected)
             target = directory / name
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.suffix == ".jpg":
@@ -58,6 +63,23 @@ def prepare(output, desert=False, inland=False):
             else:
                 target.write_bytes(original)
         print(f"Verified CC0 asset: {model} ({len(files)} source files)")
+    if inland:
+        for name in ("pine_sapling_medium", "grass_medium_01"):
+            foliage = output / name
+            combined = foliage / "foliage.png"
+            subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-i", str(foliage/"diff.png"),
+                            "-i", str(foliage/"alpha.png"), "-filter_complex",
+                            "[1:v]format=gray[mask];[0:v][mask]alphamerge", "-frames:v", "1",
+                            "-pix_fmt", "rgba", str(combined)], check=True)
+            combined.replace(foliage / "diff.png")
+            (foliage / "alpha.png").unlink()
+    people = {"taylor"} if desert else {"sage", "colleagues"}
+    for name, (url, expected) in manifest("people-assets.json").items():
+        if name in people:
+            directory = output / "people"
+            directory.mkdir(parents=True, exist_ok=True)
+            convert_figure(verified(url, expected), directory, name)
+            print(f"Verified CC0 figure: {name}")
     if inland:
         build_inland(output)
     elif desert:

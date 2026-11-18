@@ -34,7 +34,7 @@ class Model:
     def __init__(self):
         self.parts = defaultdict(list)
 
-    def face(self, kind, points, uv=None):
+    def face(self, kind, points, uv=None, normals=None):
         normal = cross(minus(points[1], points[0]), minus(points[2], points[0]))
         length = math.hypot(*normal)
         if length < 1e-7:
@@ -47,7 +47,8 @@ class Model:
         part = self.parts[kind]
         for index in range(1, len(points)-1):
             for vertex in (0, index, index+1):
-                part.append((*points[vertex], *normal, *uv[vertex]))
+                vertex_normal = normals[vertex] if normals is not None else normal
+                part.append((*points[vertex], *vertex_normal, *uv[vertex]))
 
     def box(self, kind, x, y, z, width, height, depth):
         right, top, far = x+width, y+height, z+depth

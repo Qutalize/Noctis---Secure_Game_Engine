@@ -1,0 +1,94 @@
+{
+  "grass_medium_01": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/grass_medium_01/grass_medium_01_diff_1k.jpg",
+      "71495bd6a11fddcab0aaff38246fea1a7b802a705483f1c7cbca53955daa8050"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/grass_medium_01/grass_medium_01_nor_gl_1k.jpg",
+      "cae298d3d1d7ff7c7e210ad8ac772b96706e356f9315a6b04fde373ce01ccf1e"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/grass_medium_01/grass_medium_01_arm_1k.jpg",
+      "9a3a30f72bc02f4398967c5b08f2d20cce30bd423a2613b42a727034296fa3ae"
+    ],
+    "alpha.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/grass_medium_01/grass_medium_01_alpha_1k.jpg",
+      "90ad8db2b471de6b61597c60bc218d1295c4bf68230be9083aa2001b9067b2e2"
+    ]
+  },
+  "leafy_grass": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/leafy_grass/leafy_grass_diff_1k.jpg",
+      "cfa40bc9d9417d1852db8753a8d5917f110c40101179f63543c382e39bc05e4a"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/leafy_grass/leafy_grass_nor_gl_1k.jpg",
+      "832328216adc0a7e1f70a31d5ee48c9ab7f2152d83816122736cf42ac4b2ebd6"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/leafy_grass/leafy_grass_arm_1k.jpg",
+      "95432451cb2693794459fe7ea339ea9ffdb5959c40373740f80a4aa1703f089d"
+    ]
+  },
+  "forest_ground_04": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_ground_04/forest_ground_04_diff_1k.jpg",
+      "50a4dda30875020c64385261aa7e00e2155b592302fa6794165f58fae73cbd2c"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_ground_04/forest_ground_04_nor_gl_1k.jpg",
+      "9c3a0200e02ce40edffbbf9f5f623ef08ea9b1b7812b556182ec978f88887151"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_ground_04/forest_ground_04_arm_1k.jpg",
+      "1dea651a5626530a08544804a616847bfb47b97bb93ecb8c84f13c4f1d498d83"
+    ]
+  },
+  "rocky_trail": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rocky_trail/rocky_trail_diff_1k.jpg",
+      "7f20d83cd4a67f9c38abf72f39f5a3749a962e90bdc156998be027b1227a5bd6"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rocky_trail/rocky_trail_nor_gl_1k.jpg",
+      "087b8912c8cf40a528965c4282a5b3e4be011da5790273ffcdb5bd2697bde7dd"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rocky_trail/rocky_trail_arm_1k.jpg",
+      "4c1a5a64fad1049a9e9719a9af5f4b9d4eabef5307de81d7828f5170d0c4c172"
+    ]
+  },
+  "pine_bark": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/pine_bark/pine_bark_diff_1k.jpg",
+      "89ddfbff0388d30caff902ba600cdf75eb1e651ca71ece6594b5a9b27abb47ab"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/pine_bark/pine_bark_nor_gl_1k.jpg",
+      "666e5f175a010f12577687dd8029125bff99110e6a97958afb295b34266437db"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/pine_bark/pine_bark_arm_1k.jpg",
+      "1ba20ec25c9f43327d6aa0ea809917854cff553ad7f21fb548e853a5b5ec701a"
+    ]
+  },
+  "pine_sapling_medium": {
+    "diff.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_medium/pine_sapling_medium_twig_diff_1k.jpg",
+      "e649f0f9bc74d1af5f1a45eaf2fe7a29adaaddfab251f746b983da301e4b80e1"
+    ],
+    "nor_gl.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_medium/pine_sapling_medium_twig_nor_gl_1k.jpg",
+      "2a02a482a18d20255c800845902d5e0061d2a2d14107d7c4ed0b789414153141"
+    ],
+    "arm.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_medium/pine_sapling_medium_twig_arm_1k.jpg",
+      "47facef9985e8c073184a64d15ea14bd2dc3b3debfb93f3671b6d5ad0dbc163d"
+    ],
+    "alpha.jpg": [
+      "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_medium/pine_sapling_medium_twig_alpha_1k.jpg",
+      "bee10734c529a874570da6e4091758de5cc7dee17a359eeacd9c67fde1cb0947"
+    ]
+  }
+}

@@ -39,9 +39,10 @@ def ground_at(keys, x, z):
 
 def build_ground(keys):
     model = Model()
-    offsets = [-185.,-138.,-101.,-80.,-65.,-54.,-47.,-40.,-34.,-29.,-24.,-19.,-15.,-12.,-9.,
+    offsets = [-458.,-296.,-185.,-138.,-101.,-80.,-65.,-54.,-47.,-40.,-34.,-29.,-24.,-19.,-15.,-12.,-9.,
                -7.,-5.9,-4.95,-4.25,-3.8,0.,3.8,4.25,4.95,5.9,7.,9.,12.,15.,19.,24.,29.,34.,
-               40.,47.,54.,65.,80.,101.,138.,185.]
+               40.,47.,54.,65.,80.,101.,138.,185.,296.,458.]
+    start,end = keys[0][0],keys[-1][0]
 
     def point(offset, z, lift=0.):
         x, height = road_at(keys,z)
@@ -56,8 +57,8 @@ def build_ground(keys):
         uv = [(offset/4.4,z/7.5) for offset,z in ((left,far),(right,far),(right,near),(left,near))]
         model.face(kind,points,uv)
 
-    for distance in range(-32,409,2):
-        following=min(distance+2,409)
+    stops = sorted(set(range(start,end+1,3)) | {key[0] for key in keys} | {40,61})
+    for distance,following in zip(stops,stops[1:]):
         for left,right in zip(offsets,offsets[1:]):
             edge = [land(left,following),land(right,following),land(right,distance),land(left,distance)]
             model.face(SOIL,edge,[(x/4.6,z/4.6) for x,_,z in edge])
@@ -65,10 +66,12 @@ def build_ground(keys):
         for side in (-1,1):
             stripe=side*3.88
             strip("line",stripe-.047,stripe+.047,distance,following,.018)
-    for distance in range(-30,406,8):
+    for distance in range(start+2,end-3,8):
         for side in (-1,1):
             center=side*.15
             strip("yellow",center-.055,center+.055,distance,distance+3.4,.019)
+    for distance in range(40,61):
+        strip(ASPHALT,4.12,12.5,distance,distance+1,.018)
     return model
 
 
@@ -130,6 +133,15 @@ def build_roadside(keys):
             y=ground_at(keys,x,distance)
             model.box("timber",x-.047,y,distance-.04,.094,.72,.08)
             model.box("line",x-.053,y+.58,distance-.048,.106,.088,.096)
+    rest_x,rest_y=road_at(keys,52.)
+    model.box("rock",rest_x+8.2,rest_y-.04,50.7,3.8,.28,3.85)
+    for x in (rest_x+8.35,rest_x+11.58):
+        for z in (50.85,54.25):
+            model.box("timber",x,rest_y+.16,z,.16,2.79,.16)
+    model.box("metal",rest_x+8.06,rest_y+2.88,50.44,4.17,.17,4.2)
+    model.box("timber",rest_x+8.47,rest_y+.76,52.7,1.39,.075,.56)
+    for z in (51.05,54.0):
+        model.box("metal",rest_x+7.6,rest_y+.024,z,.10,.46,.1)
     for distance in (27.,53.,79.,105.,131.,157.):
         x=road_at(keys,distance)[0]-9.4
         y=ground_at(keys,x,distance)

@@ -1330,11 +1330,11 @@ void Renderer::DrawOverlay(const Mesh& mesh) {
                DepthMode::Disabled, nullptr, /*isEnemy=*/false);
 }
 
-void Renderer::BeginFrame(const Camera& camera, float verticalFovDegrees) {
+void Renderer::BeginFrame(const Camera& camera, float verticalFovDegrees, float farDistance) {
     // 行列を確定（DrawMesh で使う）
     const float aspect = static_cast<float>(m_width) / static_cast<float>(m_height);
     m_viewMatrix = camera.GetViewMatrix();
-    m_projMatrix = camera.GetProjMatrix(XMConvertToRadians(verticalFovDegrees), aspect, 0.1f, 500.0f);
+    m_projMatrix = camera.GetProjMatrix(XMConvertToRadians(verticalFovDegrees), aspect, 0.1f, farDistance);
     m_cameraPos  = camera.GetPosition(); // スペキュラ計算用に視点位置を保持
 
     // J-04: フレーム鍵を更新（xorshift32）。非0 を保証して「マスク==素の値」を避ける。
@@ -2176,7 +2176,11 @@ void Renderer::RenderShadowPass() {
         if (rec.material == MaterialType::Overlay) continue;
         if (rec.depth    == DepthMode::Disabled)   continue;
         if (rec.mesh == nullptr) continue;
-        if (rec.pbr && rec.pbr->coastalParams.x > .5f) continue;
+        if (rec.pbr) {
+            const float mode = rec.pbr->coastalParams.x;
+            // The depth-only shader would turn cutout grass and needles into rectangular shadows.
+            if (mode > .5f || mode == -3.f || mode == -5.f) continue;
+        }
 
         const bool isSkinned = (rec.material == MaterialType::PbrSkinned);
         if (isSkinned && (!m_shadowSkinnedPSO || rec.skinPaletteAddr == 0)) {
@@ -2358,6 +2362,7 @@ void Renderer::WriteCbAndDraw(const Mesh& mesh, const XMMATRIX& world,
     cb.accentLight = m_accentLight;
     cb.rearLight = m_rearLight;
     cb.coastalHaze = m_coastalHaze;
+    cb.scenicWeather = m_scenicWeather;
     // cameraPos.w にフォグ有効フラグ（1=フォグ / 0=フォグ無し）を載せる（PS が距離減衰に使う）。
     cb.cameraPos  = XMFLOAT4{ m_cameraPos.x, m_cameraPos.y, m_cameraPos.z,
                               m_fogEnabled ? 1.0f : 0.0f };

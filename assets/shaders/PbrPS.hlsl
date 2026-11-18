@@ -35,6 +35,7 @@ cbuffer SceneConstants : register(b0)
     float4 gAccentLight;
     float4 gRearLight;
     float4 gCoastalHaze;
+    float4 gScenicWeather;
 };
 
 #include "SunsetWaves.hlsli"
@@ -121,37 +122,35 @@ float3 FresnelSchlick(float cosTheta, float3 f0)
     return f0 + (1.0f - f0) * pow(saturate(1.0f - cosTheta), 5.0f);
 }
 
+float RainLight(float2 pixel)
+{
+    if (gScenicWeather.x <= 0.f) return 0.f;
+    float2 rain = pixel * gScenicWeather.z;
+    rain.x -= rain.y * .20f;
+    float shaft = floor(rain.x / 11.f);
+    float speed = frac(sin(shaft * 52.71f) * 614.33f);
+    rain.y -= (440.f + speed * 410.f) * gScenicWeather.y;
+    float cell = floor(rain.y / 79.f);
+    float seed = frac(sin(dot(float2(shaft, cell), float2(61.2f, 17.31f))) * 4375.21f);
+    float2 local = float2(frac(rain.x / 11.f) * 11.f, frac(rain.y / 79.f) * 79.f);
+    float width = 1.f - smoothstep(.22f, .86f, abs(local.x - (1.f + 9.f * seed)));
+    float tail = smoothstep(2.f, 11.f, local.y) * (1.f - smoothstep(12.f, 29.f, local.y));
+    return gScenicWeather.x * width * tail * .19f * smoothstep(.36f, .77f, seed);
+}
+
 float4 PSMain(PSInput input) : SV_Target
 {
-    if (gCoastalParams.x > 3.5f) {
-        const float time = gCoastalParams.y;
-        const float2 world = input.worldPos.xz;
-        const float2 drift = world * .84f + time * float2(.26f, -.14f);
-        const float phase = CoastalNoise(drift * .43f);
-        const float2 ripples = float2(CoastalNoise(drift * 3.6f + phase),
-                                      CoastalNoise(drift.yx * 4.1f - phase)) - .5f;
-        const float rippleFilter = 1.f - smoothstep(.08f, .47f, length(fwidth(world)));
-        const float3 normal = normalize(float3(ripples.x * .25f * rippleFilter, 1.f,
-                                                ripples.y * .28f * rippleFilter));
-        const float3 view = normalize(gCameraPos.xyz - input.worldPos);
-        const float3 ray = reflect(-view, normal);
-        const float3 sun = normalize(-gLightDir.xyz);
-        const float3 sky = CoastalSky(normalize(float3(ray.x, max(.035f, ray.y), ray.z)),
-                                      sun, gCoastalParams.z, gCoastalParams.w, time);
-        const float depth = saturate(input.uv.x * 1.32f);
-        const float silt = lerp(.65f, 1.25f, CoastalNoise(world * 1.9f + ripples * .29f));
-        const float3 bed = lerp(float3(.32f, .27f, .16f) * silt, float3(.086f, .20f, .15f), depth);
-        const float fresnel = .07f + .87f * pow(1.f - saturate(dot(view, normal)), 4.5f);
-        const float sparkle = pow(saturate(dot(ray, sun)), 84.f) * .58f;
-        return float4(saturate(lerp(bed, sky, fresnel) + sparkle * float3(1.f, .69f, .35f)), 1.f);
-    }
     if (gCoastalParams.x > 2.5f) {
         return float4(gBaseColorFactor.rgb * lerp(.15f, 1.f, gCoastalParams.w), 1.0f);
     }
     if (gCoastalParams.x > 1.5f) {
         float3 direction = normalize(input.worldPos - gCameraPos.xyz);
-        return float4(saturate(CoastalSky(direction, normalize(-gLightDir.xyz),
-                                         gCoastalParams.z, gCoastalParams.w, gCoastalParams.y)), 1.0f);
+        float3 sky = CoastalSky(direction, normalize(-gLightDir.xyz),
+                                 gCoastalParams.z, gCoastalParams.w, gCoastalParams.y);
+        if (gScenicWeather.x <= 0.f) return float4(saturate(sky), 1.f);
+        float clouds = CoastalNoise(direction.xz * 7.f + direction.y * 5.f + gScenicWeather.y * .025f);
+        float3 overcast = lerp(float3(.33f, .39f, .43f), float3(.64f, .69f, .72f), clouds);
+        return float4(saturate(lerp(sky, overcast, gScenicWeather.x) + RainLight(input.position.xy)), 1.0f);
     }
     if (gCoastalParams.x > 0.5f) {
         const float time = gCoastalParams.y;
@@ -202,6 +201,8 @@ float4 PSMain(PSInput input) : SV_Target
     const float2 texDx = ddx(input.uv);
     const float2 texDy = ddy(input.uv);
     const bool filterDistantDetail = gCoastalParams.x < -1.5f;
+    const bool foliage = gCoastalParams.x == -3.f || gCoastalParams.x == -5.f;
+    const bool terrain = gCoastalParams.x == -4.f;
     const float footprint = max(length(texDx), length(texDy));
 
     // --- マテリアル値の取得 ---
@@ -212,7 +213,10 @@ float4 PSMain(PSInput input) : SV_Target
 
     if (hasTextures) {
         float4 baseSample = gBaseColorMap.Sample(gSampler, input.uv);
-        if (filterDistantDetail) {
+        if (foliage || gCoastalParams.x == -6.f) {
+            clip(baseSample.a - (foliage ? .31f : .45f));
+        }
+        if (filterDistantDetail && !foliage) {
             float4 area = gBaseColorMap.SampleGrad(gSampler,input.uv + .35f*(texDx+texDy),texDx,texDy) +
                 gBaseColorMap.SampleGrad(gSampler,input.uv + .35f*(texDx-texDy),texDx,texDy) +
                 gBaseColorMap.SampleGrad(gSampler,input.uv + .35f*(-texDx+texDy),texDx,texDy) +
@@ -241,6 +245,15 @@ float4 PSMain(PSInput input) : SV_Target
         metallic  *= orm.b;
     }
     // roughness が 0 だとハイライトが 1 ピクセルの点になって破綻するので下限を切る。
+    float wet = 0.f;
+    if (terrain) {
+        const float broad = CoastalNoise(input.worldPos.xz * .024f);
+        const float detail = CoastalNoise(input.worldPos.xz * .13f);
+        albedo.rgb *= lerp(.70f, 1.28f, broad * .78f + detail * .22f);
+        wet = gScenicWeather.x * smoothstep(.24f, .79f, detail);
+        albedo.rgb *= 1.f - .22f * wet;
+        roughness = lerp(roughness, .18f, wet * .74f);
+    }
     roughness = clamp(roughness, 0.04f, 1.0f);
     metallic  = saturate(metallic);
 
@@ -258,10 +271,10 @@ float4 PSMain(PSInput input) : SV_Target
     }
 
     float3 V = normalize(gCameraPos.xyz - input.worldPos);
-    if (gCoastalParams.x < -2.5f) {
-        N = normalize(lerp(N * (dot(N, V) < 0.f ? -1.f : 1.f), float3(0.f, 1.f, 0.f), .54f));
+    if (foliage) {
+        N = normalize(lerp(N * (dot(N, V) < 0.f ? -1.f : 1.f), float3(0.f, 1.f, 0.f), .52f));
         const float colorPatch = CoastalNoise(input.worldPos.xz * .35f);
-        albedo.rgb *= lerp(.56f, 1.20f, input.uv.y * .72f + colorPatch * .28f);
+        albedo.rgb *= lerp(.68f, 1.19f, (1.f - input.uv.y) * .49f + colorPatch * .51f);
     }
     float3 L = normalize(-gLightDir.xyz);   // gLightDir は光が進む向き
     float3 H = normalize(V + L);
@@ -301,6 +314,7 @@ float4 PSMain(PSInput input) : SV_Target
     float3 lamps = WarmFill(gFillLight, input.worldPos, N) + WarmFill(gAccentLight, input.worldPos, N) +
                    WarmFill(gRearLight, input.worldPos, N);
     float3 color = ambient + direct + albedo.rgb * lamps;
+    color += wet * float3(.10f, .14f, .18f) * pow(1.f - ndotv, 3.f);
 #if ENGINE_RT_REFLECTIONS
     color = lerp(color,RayReflection(input.worldPos,N,V,L,gLightColor.rgb*gLightColor.w,gAmbient.rgb),FresnelSchlick(ndotv,f0) * (1.0f - .7f * roughness));
 #endif
@@ -321,5 +335,5 @@ float4 PSMain(PSInput input) : SV_Target
     color = pow(color, 1.0f / 2.2f);   // ガンマ補正（sRGB 相当）
 
     const float haze = 1.f - exp(-max(0.f, dist - 24.f) * gCoastalHaze.w);
-    return float4(lerp(color, gCoastalHaze.rgb, haze), albedo.a);
+    return float4(saturate(lerp(color, gCoastalHaze.rgb, haze) + RainLight(input.position.xy)), albedo.a);
 }
