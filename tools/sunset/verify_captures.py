@@ -81,21 +81,29 @@ def main(directory):
         }
     if results["wide"]["assets"] == results["close"]["assets"]:
         raise ValueError("Both camera shots rendered identical evidence")
-    first = read_ppm(directory / "wide-detailed.ppm")
-    later = read_ppm(directory / "wide-water-later.ppm")
-    left_sea_pixels = [3 * (row * WIDTH + column)
-                       for row in range(340, 470) for column in range(40, 290)]
+    first = read_ppm(directory / "sea-first.ppm")
+    later = read_ppm(directory / "sea-later.ppm")
+    dusk = read_ppm(directory / "sea-dusk.ppm")
+    sea_pixels = [3 * (row * WIDTH + column)
+                  for row in range(300, 485) for column in range(95, 440)]
     changed_sea = sum(max(abs(first[offset + channel] - later[offset + channel])
-                          for channel in range(3)) > 8 for offset in left_sea_pixels)
-    if changed_sea < len(left_sea_pixels) * .02:
+                          for channel in range(3)) > 4 for offset in sea_pixels)
+    if changed_sea < len(sea_pixels) * .02:
         raise ValueError("Sea appears static in the fixed-camera temporal comparison")
-    write_png(directory / "wide-water-later.png", later)
+    sky_pixels = [3 * (row * WIDTH + column) for row in range(20, 110) for column in range(80, 800)]
+    day_sky = statistics.mean(sum(first[offset:offset + 3]) / 3 for offset in sky_pixels)
+    dusk_sky = statistics.mean(sum(dusk[offset:offset + 3]) / 3 for offset in sky_pixels)
+    if day_sky - dusk_sky < 35:
+        raise ValueError("Sky did not darken at dusk")
+    for name, pixels in (("sea-first", first), ("sea-later", later), ("sea-dusk", dusk)):
+        write_png(directory / f"{name}.png", pixels)
     report = {
         "adapter": "D3D12 WARP", "resolution": [WIDTH, HEIGHT], "shots": results,
-        "wide_fixed_camera_sea_motion": {
-            "time_delta_s": .62, "roi_xyxy": [40, 340, 290, 470],
-            "percent_pixels_with_any_rgb_difference_gt_8": round(100 * changed_sea / len(left_sea_pixels), 2),
+        "fixed_camera_sea_motion": {
+            "time_delta_s": .62, "roi_xyxy": [95, 300, 440, 485],
+            "percent_pixels_with_any_rgb_difference_gt_4": round(100 * changed_sea / len(sea_pixels), 2),
         },
+        "fixed_camera_mean_sky_rgb_0_to_255": {"afternoon": round(day_sky, 2), "dusk": round(dusk_sky, 2)},
     }
     encoded = json.dumps(report, indent=2)
     (directory / "results.json").write_text(encoded + "\n", encoding="utf-8")

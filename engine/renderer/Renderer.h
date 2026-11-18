@@ -96,7 +96,7 @@ struct PbrMaterial {
     float normalScale     = 1.0f;
     bool  hasTextures     = false;
     bool  valid           = false;
-    DirectX::XMFLOAT4 waterParams{};
+    DirectX::XMFLOAT4 coastalParams{};
 };
 
 // VS/PS と共有する定数バッファのレイアウト。256B アライン必須。
@@ -118,7 +118,7 @@ struct alignas(256) SceneConstants {
     // ---- ステージL-02（PBR）で追加 ----
     DirectX::XMFLOAT4   baseColorFactor;  // rgba
     DirectX::XMFLOAT4   materialParams;   // x=metallic, y=roughness, z=法線強度, w=テクスチャ有無
-    DirectX::XMFLOAT4   waterParams;      // x=有効, y=経過秒
+    DirectX::XMFLOAT4   coastalParams;    // x=描画種別, y=経過秒, z=夕景, w=薄暮
 };
 static_assert(sizeof(SceneConstants) == 512);
 

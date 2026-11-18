@@ -12,7 +12,6 @@ using namespace DirectX;
 namespace sunset {
 namespace {
 constexpr float kPi = std::numbers::pi_v<float>;
-const XMFLOAT3 kSun{-0.35f, 0.16f, 0.923f};
 
 float Mix(float a, float b, float amount) {
     return a + (b - a) * amount;
@@ -38,41 +37,20 @@ float CloudNoise(float x, float y) {
                Mix(sample(cellX, cellY + 1.f), sample(cellX + 1.f, cellY + 1.f), blendX), blendY);
 }
 
-XMFLOAT4 SkyColor(const XMFLOAT3& direction) {
-    const float height = std::clamp(direction.y, 0.f, 1.f);
-    const float upper = 1.f - std::exp(-height * 4.f);
-    const float alignment = std::clamp(direction.x * kSun.x + direction.y * kSun.y +
-                                       direction.z * kSun.z, 0.f, 1.f);
-    const float glow = std::pow(alignment, 33.f) * .34f;
-    const float halo = std::pow(alignment, 280.f) * .16f;
-    const float spread = std::max(.10f, height + .16f);
-    const float cloudX = (direction.x + .27f * direction.z) / spread * 3.4f + 4.7f;
-    const float cloudY = direction.z / spread * 9.5f;
-    const float density = .61f * CloudNoise(cloudX, cloudY) +
-        .27f * CloudNoise(cloudX * 2.2f, cloudY * 2.2f) +
-        .12f * CloudNoise(cloudX * 4.3f, cloudY * 4.3f);
-    const float cloud = std::clamp((density - .51f) * 4.f, 0.f, .86f) *
-        std::clamp((height - .028f) * 12.f, 0.f, 1.f);
-    const float rim = .25f * std::pow(alignment, 11.f) + .17f * (1.f - cloud);
-    return {Mix(Mix(.79f, .18f, upper) + glow + halo, .30f + rim, cloud),
-            Mix(Mix(.44f, .33f, upper) + glow * .59f + halo * .80f, .30f + rim * .57f, cloud),
-            Mix(Mix(.30f, .56f, upper) + glow * .22f + halo * .44f, .42f + rim * .27f, cloud), 1.f};
-}
-
 Mesh Sky(Renderer& renderer) {
-    constexpr int rings = 126;
-    constexpr int segments = 256;
-    constexpr float radius = 165.f;
-    std::vector<Vertex> vertices;
+    constexpr int rings = 20;
+    constexpr int segments = 64;
+    constexpr float radius = 380.f;
+    std::vector<PbrVertex> vertices;
     std::vector<uint32_t> indices;
     for (int y = 0; y <= rings; ++y) {
-        const float elevation = Mix(-.22f, kPi * .5f, static_cast<float>(y) / rings);
+            const float elevation = Mix(-kPi * .5f, kPi * .5f, static_cast<float>(y) / rings);
         for (int x = 0; x <= segments; ++x) {
             const float azimuth = 2.f * kPi * static_cast<float>(x) / segments;
             const XMFLOAT3 direction{std::sin(azimuth) * std::cos(elevation),
                                      std::sin(elevation), std::cos(azimuth) * std::cos(elevation)};
             vertices.push_back({{radius * direction.x, radius * direction.y, radius * direction.z},
-                                kSun, SkyColor(direction)});
+                                {0, 1, 0}, {1, 0, 0, 1}, {0, 0}});
             if (x < segments && y < rings) {
                 const auto index = static_cast<uint32_t>(y * (segments + 1) + x);
                 const auto next = index + segments + 1;
@@ -80,24 +58,7 @@ Mesh Sky(Renderer& renderer) {
             }
         }
     }
-    constexpr int diskSegments = 32;
-    constexpr float diskRadius = 1.95f;
-    const XMVECTOR center = XMVector3Normalize(XMLoadFloat3(&kSun)) * (radius - 1.f);
-    const XMVECTOR right = XMVector3Normalize(XMVector3Cross(XMVectorSet(0, 1, 0, 0), center));
-    const XMVECTOR up = XMVector3Normalize(XMVector3Cross(center, right));
-    const XMFLOAT4 diskColor{1.45f, 1.13f, .66f, 1.f};
-    XMFLOAT3 position;
-    XMStoreFloat3(&position, center);
-    const auto diskIndex = static_cast<uint32_t>(vertices.size());
-    vertices.push_back({position, kSun, diskColor});
-    for (int i = 0; i < diskSegments; ++i) {
-        const float angle = 2.f * kPi * static_cast<float>(i) / diskSegments;
-        XMStoreFloat3(&position, center + diskRadius * (std::cos(angle) * right + std::sin(angle) * up));
-        vertices.push_back({position, kSun, diskColor});
-        indices.insert(indices.end(), {diskIndex, diskIndex + 1 + static_cast<uint32_t>(i),
-                                       diskIndex + 1 + static_cast<uint32_t>((i + 1) % diskSegments)});
-    }
-    return renderer.CreateMesh(vertices, indices);
+    return renderer.CreatePbrMesh(vertices, indices);
 }
 
 Mesh Islands(Renderer& renderer) {
@@ -110,12 +71,12 @@ Mesh Islands(Renderer& renderer) {
                                           : XMFLOAT4{.34f, .25f, .33f, 1.f};
         for (int i = 0; i <= samples; ++i) {
             const float x = Mix(-120.f, 120.f, static_cast<float>(i) / samples);
-            const float envelope = std::exp(-std::pow((x - 43.f + layer * 10.f) / 34.f, 2.f)) +
-                                   .7f * std::exp(-std::pow((x + 83.f) / 14.f, 2.f));
+            const float envelope = std::exp(-std::pow((x + 47.f - layer * 10.f) / 29.f, 2.f)) +
+                                   .5f * std::exp(-std::pow((x - 83.f) / 14.f, 2.f));
             const float top = envelope * (2.2f + 6.f * Pattern(x * .013f, layer * .3f)) - 1.4f;
             const float z = 116.f - layer * 19.f;
-            vertices.push_back({{x, -2.f, z}, kSun, color});
-            vertices.push_back({{x, top, z}, kSun, color});
+            vertices.push_back({{x, -2.f, z}, {0, 1, 0}, color});
+            vertices.push_back({{x, top, z}, {0, 1, 0}, color});
             if (i < samples) {
                 const auto base = start + static_cast<uint32_t>(2 * i);
                 indices.insert(indices.end(), {base, base + 1, base + 2, base + 2, base + 1, base + 3});
@@ -223,11 +184,11 @@ void Arch(MeshData& mesh, float x, float z, bool detailed) {
 
 MeshData Harbor(bool detailed) {
     MeshData data;
-    StoneBox(data, -3.05f, -1.05f, -10.f, 6.10f, 1.04f, 26.f);
-    StoneBox(data, 3.10f, -1.05f, -5.f, 9.f, 1.04f, 14.f);
+    StoneBox(data, -3.05f, -.32f, -1.f, 6.10f, .31f, 17.f);
+    StoneBox(data, 3.10f, -.26f, -5.f, 9.f, .25f, 14.f);
     StoneBox(data, 3.04f, -.06f, -4.5f, 1.30f, .06f, 13.f);
     if (detailed) {
-        for (int z = -10; z < 16; ++z) {
+        for (int z = -1; z < 16; ++z) {
             const float shift = z % 2 == 0 ? .0f : .2f;
             for (int x = 0; x < 7; ++x) {
                 StoneBox(data, -2.98f + x * .84f + shift, -.014f, static_cast<float>(z) + .04f,
@@ -360,6 +321,226 @@ struct ColoredMesh {
     Mesh Upload(Renderer& renderer) const { return renderer.CreateMesh(vertices, indices); }
 };
 
+float Shoreline(float x) {
+    return -11.f + 1.55f * std::sin(.17f * x) + .54f * std::sin(.39f * x + 1.4f);
+}
+
+void Palm(ColoredMesh& mesh, float x, float y, float z, float size, float seed) {
+    constexpr int trunkSides = 7;
+    constexpr int trunkSteps = 7;
+    constexpr int frondCount = 10;
+    const auto ring = [=](int step, int side) {
+        const float height = static_cast<float>(step) / trunkSteps;
+        const float angle = 2.f * kPi * side / trunkSides;
+        const float radius = size * Mix(.145f, .067f, height);
+        return XMFLOAT3{x + radius * std::cos(angle) + size * .49f * height * height * std::cos(seed),
+                        y + size * height * 2.7f, z + radius * std::sin(angle) + size * .36f * height * height};
+    };
+    for (int step = 0; step < trunkSteps; ++step) {
+        for (int side = 0; side < trunkSides; ++side) {
+            const float tone = .31f + .075f * Pattern(step * .58f, side * .31f);
+            mesh.Face({ring(step, side), ring(step + 1, side), ring(step + 1, side + 1), ring(step, side + 1)},
+                      {tone, tone * .78f, tone * .52f, 1});
+        }
+    }
+    const float centerX = x + size * .49f * std::cos(seed);
+    const float centerZ = z + size * .36f;
+    for (int branch = 0; branch < frondCount; ++branch) {
+        const float angle = kPi * 2.f * branch / frondCount + seed;
+        const float axisX = std::cos(angle), axisZ = std::sin(angle);
+        const float length = size * (1.27f + .59f * Pattern(angle, seed));
+        const float lift = size * (.74f + .39f * Pattern(seed, angle));
+        const auto leaf = [&](float progress, float width) {
+            return XMFLOAT3{centerX + length * progress * axisX + width * axisZ,
+                            y + size * 2.63f + lift * std::sin(progress * kPi) - size * .54f * progress * progress,
+                            centerZ + length * progress * axisZ - width * axisX};
+        };
+        for (int strip = 0; strip < 11; ++strip) {
+            const float start = static_cast<float>(strip) / 11.f;
+            const float end = (strip + 1.f) / 11.f;
+            const float width = .29f * size * std::sin(kPi * (.06f + .88f * start));
+            const float tone = .23f + .22f * Pattern(seed + angle, start * 3.f);
+            for (const float side : {-1.f, 1.f}) {
+                mesh.Face({leaf(start, 0.f), leaf(end, 0.f), leaf(std::min(1.f, end + .08f), width * side)},
+                          {tone * .48f, tone, tone * .43f, 1.f});
+            }
+        }
+    }
+}
+
+Mesh Shore(Renderer& renderer) {
+    ColoredMesh mesh;
+    for (int segment = -55; segment < 55; ++segment) {
+        for (int band = 0; band < 18; ++band) {
+            const auto vertex = [](float x, float distance) {
+                const float hills = std::clamp((distance - 3.5f) * .28f, 0.f, 1.f);
+                const float side = std::clamp(std::abs(x) * .12f, 0.f, 1.f);
+                const float height = -.64f + std::min(distance, 5.f) * .13f +
+                    hills * side * (CloudNoise(x * .17f, distance * .24f) + .6f) * 1.3f;
+                return XMFLOAT3{x, height, Shoreline(x) - distance};
+            };
+            const float distance = -.72f + band * 1.35f;
+            const float texture = CloudNoise(segment * .59f, band * .83f);
+            const float greens = (std::clamp((distance - 3.f) * .22f + .35f * texture, 0.f, 1.f)) *
+                std::clamp((std::abs(static_cast<float>(segment)) - 3.f) * .31f, 0.f, 1.f);
+            const float wet = std::clamp((distance + .7f) * .65f, 0.f, 1.f);
+            const XMFLOAT4 color{Mix(Mix(.45f, .82f, wet), .27f + .13f * texture, greens),
+                                 Mix(Mix(.37f, .72f, wet), .36f + .16f * texture, greens),
+                                 Mix(Mix(.28f, .52f, wet), .18f + .05f * texture, greens), 1.f};
+            mesh.Face({vertex(static_cast<float>(segment), distance + 1.35f),
+                       vertex(segment + 1.f, distance + 1.35f), vertex(segment + 1.f, distance),
+                       vertex(static_cast<float>(segment), distance)}, color);
+        }
+    }
+    for (int tree = 0; tree < 16; ++tree) {
+        const float x = (tree < 8 ? -1.f : 1.f) * (4.55f + (tree % 8) * 2.06f);
+        const float inland = 3.9f + 5.2f * CloudNoise(tree * .82f, 1.36f);
+        Palm(mesh, x, inland > 5.f ? .76f : .20f, Shoreline(x) - inland,
+             .72f + .45f * CloudNoise(tree * 1.33f, 3.1f), tree * 1.62f);
+    }
+    for (int rock = 0; rock < 32; ++rock) {
+        const float x = -27.f + rock * .64f;
+        const float z = Shoreline(x) - .1f + CloudNoise(x * .35f, 6.2f) * 1.35f;
+        const float radius = .38f + .91f * CloudNoise(x, 6.4f);
+        for (int side = 0; side < 7; ++side) {
+            const float first = kPi * 2.f * side / 7.f, second = kPi * 2.f * (side + 1) / 7.f;
+            mesh.Face({{x + .22f * radius, -.17f + radius * .54f, z + .15f * radius},
+                       {x + radius * std::cos(first), -.65f, z + radius * std::sin(first)},
+                       {x + radius * std::cos(second), -.65f, z + radius * std::sin(second)}},
+                       {.44f, .42f, .38f, 1});
+        }
+    }
+    return mesh.Upload(renderer);
+}
+
+Mesh Ruins(Renderer& renderer) {
+    ColoredMesh mesh;
+    constexpr XMFLOAT4 cliff{.53f, .60f, .67f, 1};
+    constexpr XMFLOAT4 masonry{.61f, .66f, .69f, 1};
+    const float islandX = -31.f, islandZ = 129.f;
+    for (int face = 0; face < 19; ++face) {
+        const auto coast = [&](int section, bool top) {
+            const float angle = kPi * 2.f * (section % 19) / 19.f;
+            const float rock = .75f + .25f * CloudNoise(section % 19 * 1.7f, 9.f);
+            return XMFLOAT3{islandX + (top ? 17.f : 22.f) * rock * std::cos(angle),
+                            top ? 3.f + 3.f * rock : -1.7f,
+                            islandZ + (top ? 11.f : 17.f) * rock * std::sin(angle)};
+        };
+        mesh.Face({coast(face, false), coast(face + 1, false), coast(face + 1, true), coast(face, true)}, cliff);
+        mesh.Face({{islandX, 6.5f, islandZ}, coast(face, true), coast(face + 1, true)}, masonry);
+    }
+    for (int pillar = 0; pillar < 7; ++pillar) {
+        const float x = islandX - 12.5f + pillar * 3.6f;
+        const float height = std::array{4.5f, 10.5f, 16.f, 16.f, 13.6f, 7.f, 4.4f}[pillar];
+        const float z = islandZ - 4.8f + .66f * pillar;
+        const int blocks = static_cast<int>(height / 1.2f);
+        for (int block = 0; block < blocks; ++block) {
+            const float offset = .27f * Pattern(block * .4f, pillar * 1.1f);
+            mesh.Box(x + offset, 5.7f + block * 1.2f, z + offset, 2.35f, 1.22f, 2.75f, masonry);
+        }
+        if (pillar == 2 || pillar == 4) {
+            mesh.Box(x - .22f, 5.7f + blocks * 1.2f - .12f, z - .20f, 6.0f, 1.25f, 3.11f, masonry);
+        }
+    }
+    return mesh.Upload(renderer);
+}
+
+Mesh Boardwalk(Renderer& renderer) {
+    ColoredMesh mesh;
+    constexpr XMFLOAT4 teak{.39f, .26f, .17f, 1.f};
+    constexpr XMFLOAT4 post{.24f, .17f, .11f, 1.f};
+    for (int plank = 0; plank < 159; ++plank) {
+        const float z = -13.f + plank * .255f;
+        if (z >= -1.25f && z < 16.f) continue;
+        const float wear = .76f + .33f * CloudNoise(plank * .73f, .77f);
+        mesh.Box(-2.82f, -.11f, z, 5.63f, .145f, .242f, {teak.x * wear, teak.y * wear, teak.z * wear, 1.f});
+    }
+    for (int pierPost = 0; pierPost < 18; ++pierPost) {
+        const float z = -12.1f + pierPost * 2.23f;
+        for (const float x : {-2.78f, 2.62f}) {
+            mesh.Box(x, -1.54f, z, .17f, 2.43f, .19f, post);
+            if (pierPost < 17) {
+                mesh.Box(x + .037f, .58f, z + .12f, .095f, .075f, 2.16f, teak);
+            }
+        }
+    }
+    for (const float x : {3.38f, 7.36f, 11.72f}) {
+        for (const float z : {-4.47f, -.16f, 4.14f, 8.56f}) {
+            mesh.Box(x, -1.5f, z, .28f, 1.28f, .28f, post);
+        }
+    }
+    for (int plank = 0; plank < 47; ++plank) {
+        const float x = -13.6f + plank * .244f;
+        mesh.Box(x, -.13f, -3.7f, .232f, .15f, 2.65f, teak);
+    }
+    for (const float x : {-13.64f, -11.5f, -9.35f, -7.2f, -5.05f, -2.82f}) {
+        for (const float z : {-3.67f, -1.21f}) mesh.Box(x, -1.47f, z, .16f, 2.12f, .15f, post);
+        mesh.Box(x, .48f, -3.65f, 2.19f, .065f, .08f, teak);
+    }
+    mesh.Box(-13.35f, .03f, -2.3f, .55f, .49f, .65f, post);
+    mesh.Face({{-12.8f, .15f, -2.18f}, {-13.1f, 1.28f, -2.18f}, {-14.45f, 1.83f, -1.89f},
+               {-13.04f, 1.23f, -2.17f}}, post);
+    mesh.Face({{-14.45f, 1.83f, -1.89f}, {-14.51f, -.57f, -1.89f},
+               {-14.46f, -.56f, -1.87f}}, {.57f, .54f, .42f, 1});
+    return mesh.Upload(renderer);
+}
+
+Mesh Restaurant(Renderer& renderer) {
+    ColoredMesh mesh;
+    constexpr XMFLOAT4 beam{.36f, .21f, .12f, 1};
+    constexpr XMFLOAT4 canvas{.84f, .79f, .65f, 1};
+    constexpr XMFLOAT4 cloth{.77f, .73f, .65f, 1};
+    for (int board = 0; board < 41; ++board) {
+        mesh.Box(-6.06f, -.18f, 18.6f + board * .27f, 12.11f, .22f, .258f, beam);
+    }
+    for (const float x : {-5.6f, 5.38f}) {
+        for (const float z : {18.9f, 22.9f, 27.6f}) mesh.Box(x, -2.1f, z, .24f, 5.43f, .24f, beam);
+    }
+    for (int panel = 0; panel < 24; ++panel) {
+        const float x = -6.56f + panel * .55f;
+        const float next = x + .55f;
+        const float eave = 3.13f + .025f * std::abs(x);
+        const float ridge = 5.05f + .033f * x;
+        const float nextRidge = 5.05f + .033f * next;
+        const float tier = panel % 2 ? 1.f : .91f;
+        const XMFLOAT4 roof{canvas.x * tier, canvas.y * tier, canvas.z * tier, 1.f};
+        mesh.Face({{x,eave,18.3f},{next,eave,18.3f},{next,nextRidge,24.4f},{x,ridge,24.4f}}, roof);
+        mesh.Face({{x,ridge,24.4f},{next,nextRidge,24.4f},{next,eave,30.0f},{x,eave,30.0f}}, roof);
+        mesh.Face({{x,ridge - .07f,24.4f},{next,nextRidge - .07f,24.4f},{next,eave - .08f,18.3f},{x,eave - .08f,18.3f}}, beam);
+    }
+    for (const float side : {-1.f, 1.f}) {
+        for (const float z : {21.5f, 24.5f, 27.5f}) {
+            const float x = side * 3.65f;
+            mesh.Box(x - .63f, .85f, z - .53f, 1.26f, .075f, 1.06f, cloth);
+            for (const float offset : {-.50f, .41f}) {
+                mesh.Box(x + offset, .04f, z - .41f, .087f, .81f, .091f, beam);
+                mesh.Box(x + offset, .04f, z + .32f, .087f, .81f, .091f, beam);
+            }
+            for (const float offset : {-.96f, .65f}) {
+                mesh.Box(x - .28f, .43f, z + offset, .56f, .085f, .43f, beam);
+                mesh.Box(x - .28f, .46f, z + offset + (offset < 0.f ? 0.f : .36f), .56f, .41f, .068f, beam);
+            }
+            mesh.Box(x - .03f, .92f, z - .03f, .16f, .11f, .17f, cloth);
+        }
+    }
+    mesh.Box(-2.45f, .03f, 28.38f, 4.90f, .95f, .93f, beam);
+    mesh.Box(-2.62f, .98f, 28.29f, 5.24f, .10f, 1.12f, canvas);
+    return mesh.Upload(renderer);
+}
+
+Mesh Lanterns(Renderer& renderer) {
+    MeshData mesh;
+    for (const float x : {-4.42f, 4.42f}) {
+        for (const float z : {19.18f, 22.2f, 25.2f, 27.8f}) {
+            StoneBox(mesh, x - .13f, 2.54f, z - .13f, .26f, .41f, .26f);
+        }
+    }
+    for (const float z : {4.6f, 5.78f, 6.96f}) {
+        StoneBox(mesh, 7.34f, .49f, z, .018f, 1.65f, .71f);
+    }
+    return renderer.CreatePbrMesh(mesh.vertices, mesh.indices);
+}
+
 Mesh Resort(Renderer& renderer) {
     ColoredMesh data;
     const XMFLOAT4 plaster{.76f, .55f, .34f, 1.f};
@@ -453,11 +634,21 @@ Mesh Wing(Renderer& renderer, float side) {
 
 Scene::Scene(Renderer& renderer) {
     m_sky = Sky(renderer);
+    m_skyMaterial = renderer.CreatePbrMaterial(nullptr, nullptr, nullptr);
+    m_skyMaterial.coastalParams.x = 2.f;
     m_islands = Islands(renderer);
+    m_ruins = Ruins(renderer);
+    m_shore = Shore(renderer);
+    m_boardwalk = Boardwalk(renderer);
+    m_restaurant = Restaurant(renderer);
+    m_lanterns = Lanterns(renderer);
+    m_lanternMaterial = renderer.CreatePbrMaterial(nullptr, nullptr, nullptr);
+    m_lanternMaterial.baseColorFactor = {1.f, .65f, .25f, 1.f};
+    m_lanternMaterial.coastalParams.x = 3.f;
 
     m_water = SeaGrid(renderer);
     m_waterMaterial = renderer.CreatePbrMaterial(nullptr, nullptr, nullptr);
-    m_waterMaterial.waterParams.x = 1.f;
+    m_waterMaterial.coastalParams.x = 1.f;
     m_resort = Resort(renderer);
     m_boat = Boat(renderer);
     m_leftWing = Wing(renderer, -1.f);
@@ -480,17 +671,34 @@ Scene::Scene(Renderer& renderer) {
     }
 }
 
-void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float time) {
+void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float time, float daylight) {
     const auto identity = XMMatrixIdentity();
+    const float sunset = std::clamp(daylight * 1.68f, 0.f, 1.f);
+    const float twilight = std::clamp((daylight - .61f) / .39f, 0.f, 1.f);
+    const float dusk = twilight * twilight * (3.f - 2.f * twilight);
+    const float elevation = Mix(.72f, -.065f, daylight);
+    const float azimuth = Mix(-.91f, -.46f, daylight);
+    const XMFLOAT3 sun{std::sin(azimuth) * std::cos(elevation), std::sin(elevation),
+                       std::cos(azimuth) * std::cos(elevation)};
     renderer.SetFog(false);
-    renderer.SetDirectionalLight({-kSun.x, -kSun.y, -kSun.z}, {1, .77f, .56f}, 1.34f,
-                                 {.40f, .43f, .54f});
-    renderer.SetShadowExtent(23.f);
+    renderer.SetDirectionalLight({-sun.x, -sun.y, -sun.z},
+                                 {1.f, Mix(.93f, .64f, sunset), Mix(.86f, .36f, sunset)},
+                                 Mix(1.07f, .03f, dusk),
+                                 {Mix(.64f, .129f, dusk), Mix(.69f, .17f, dusk), Mix(.75f, .28f, dusk)});
+    renderer.SetShadowExtent(42.f);
     renderer.BeginFrame(camera);
-    renderer.DrawMesh(m_sky, identity, true);
+    m_skyMaterial.coastalParams = {2.f, time, sunset, dusk};
+    const auto& eye = camera.GetPosition();
+    renderer.DrawPbrMesh(m_sky, m_skyMaterial, XMMatrixTranslation(eye.x, eye.y, eye.z), true);
     renderer.DrawMesh(m_islands, identity);
-    m_waterMaterial.waterParams.y = time;
+    renderer.DrawMesh(m_ruins, identity);
+    renderer.DrawMesh(m_shore, identity);
+    m_waterMaterial.coastalParams = {1.f, time, sunset, dusk};
     renderer.DrawPbrMesh(m_water, m_waterMaterial, identity);
+    renderer.DrawMesh(m_boardwalk, identity);
+    renderer.DrawMesh(m_restaurant, identity);
+    m_lanternMaterial.coastalParams.w = dusk;
+    renderer.DrawPbrMesh(m_lanterns, m_lanternMaterial, identity);
     const auto& buildings = detail == Detail::Detailed ? m_detailed : m_simple;
     renderer.DrawPbrMesh(buildings.geometry, buildings.material, identity);
     renderer.DrawMesh(m_resort, identity);

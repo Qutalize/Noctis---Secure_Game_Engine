@@ -2149,7 +2149,7 @@ void Renderer::RenderShadowPass() {
         if (rec.material == MaterialType::Overlay) continue;
         if (rec.depth    == DepthMode::Disabled)   continue;
         if (rec.mesh == nullptr) continue;
-        if (rec.pbr && rec.pbr->waterParams.x > .5f) continue;
+        if (rec.pbr && rec.pbr->coastalParams.x > .5f) continue;
 
         const bool isSkinned = (rec.material == MaterialType::PbrSkinned);
         if (isSkinned && (!m_shadowSkinnedPSO || rec.skinPaletteAddr == 0)) {
@@ -2348,7 +2348,7 @@ void Renderer::WriteCbAndDraw(const Mesh& mesh, const XMMATRIX& world,
         cb.materialParams  = XMFLOAT4{ pbr->metallicFactor, pbr->roughnessFactor,
                                        pbr->normalScale,
                                        pbr->hasTextures ? 1.0f : 0.0f };
-        cb.waterParams = pbr->waterParams;
+        cb.coastalParams = pbr->coastalParams;
     } else {
         cb.baseColorFactor = XMFLOAT4{ 1.0f, 1.0f, 1.0f, 1.0f };
         cb.materialParams  = XMFLOAT4{ 0.0f, 1.0f, 1.0f, 0.0f };

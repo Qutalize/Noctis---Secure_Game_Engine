@@ -1,10 +1,9 @@
 #include "game/sunset/SunsetScene.h"
+#include "game/sunset/CoastalAudio.h"
 
 #include "engine/core/ConsoleUtf8.h"
 #include "engine/core/Window.h"
 #include "engine/math/Collision.h"
-
-#include <mmsystem.h>
 
 #include <algorithm>
 #include <chrono>
@@ -12,10 +11,10 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -25,8 +24,8 @@ namespace {
 constexpr int kWidth = 960;
 constexpr int kHeight = 540;
 constexpr int kPvFps = 24;
-constexpr int kPvSeconds = 12;
-constexpr float kCloseTime = 10.5f;
+constexpr int kPvSeconds = 20;
+constexpr float kCloseTime = 12.3f;
 constexpr float kEyeHeight = 1.62f;
 constexpr float kSpeed = 2.5f;
 constexpr XMFLOAT3 kHalfBody{.25f, .80f, .25f};
@@ -52,9 +51,16 @@ struct Walk {
             boxes.push_back({{1.82f, 0.f, 12.94f}, {3.08f, 3.25f, 15.84f}});
             return boxes;
         }();
-        center = ResolveAABBCollision(center, kHalfBody, delta, walls);
-        center.x = std::clamp(center.x, -2.55f, 2.55f);
-        center.z = std::clamp(center.z, -9.7f, 15.7f);
+        const auto next = ResolveAABBCollision(center, kHalfBody, delta, walls);
+        const auto walkable = [](float x, float z) {
+            const bool pier = x >= -2.55f && x <= 2.55f && z >= -12.75f && z <= 19.2f;
+            const bool fishing = x >= -13.38f && x <= -2.55f && z >= -3.42f && z <= -1.33f;
+            const bool restaurant = x >= -5.14f && x <= 5.14f && z >= 18.94f && z <= 27.9f;
+            const bool villaDeck = x >= 2.55f && x <= 6.7f && z >= -4.20f && z <= 8.35f;
+            return pier || fishing || restaurant || villaDeck;
+        };
+        if (walkable(next.x, center.z)) center.x = next.x;
+        if (walkable(center.x, next.z)) center.z = next.z;
     }
 
     Camera View() const {
@@ -80,19 +86,28 @@ float Ease(float progress) {
 }
 
 Camera PvCamera(float time) {
-    if (time < 4.5f) {
-        const float amount = Ease(time / 4.5f);
-        return LookAt({std::lerp(-9.6f, -8.2f, amount), std::lerp(5.2f, 4.2f, amount),
-                       std::lerp(-15.4f, -12.8f, amount)}, {-.40f, 1.3f, 11.5f});
+    if (time < 5.f) {
+        const float amount = Ease(time / 5.f);
+        return LookAt({std::lerp(-14.f, -12.6f, amount), std::lerp(13.2f, 11.8f, amount),
+                       std::lerp(-26.f, -23.8f, amount)}, {-2.1f, .5f, 25.f});
     }
-    if (time < 8.5f) {
-        const float amount = Ease((time - 4.5f) / 4.f);
-        return LookAt({std::lerp(-2.22f, -.85f, amount), 1.71f, std::lerp(-7.75f, -4.12f, amount)},
-                      {1.10f, 1.47f, 5.85f});
+    if (time < 9.8f) {
+        const float amount = Ease((time - 5.f) / 4.8f);
+        return LookAt({std::lerp(-.67f, -.12f, amount), 1.72f, std::lerp(-12.4f, -5.2f, amount)},
+                      {-.35f, 1.75f, 22.5f});
     }
-    const float amount = Ease((time - 8.5f) / 3.5f);
-    return LookAt({std::lerp(.68f, 1.25f, amount), std::lerp(1.50f, 1.37f, amount), -2.57f},
-                  {3.17f, 1.21f, 1.25f});
+    if (time < 14.5f) {
+        const float amount = Ease((time - 9.8f) / 4.7f);
+        return LookAt({std::lerp(.64f, 2.4f, amount), std::lerp(1.56f, 1.53f, amount),
+                       std::lerp(-.92f, .88f, amount)}, {6.25f, 1.48f, 5.64f});
+    }
+    const float amount = Ease((time - 14.5f) / 5.5f);
+    return LookAt({std::lerp(-.38f, .1f, amount), 1.68f, std::lerp(14.36f, 23.7f, amount)},
+                  {-.10f, 1.74f, 29.3f});
+}
+
+float PvDaylight(float time) {
+    return Ease(time / kPvSeconds);
 }
 
 void SelfTest() {
@@ -115,8 +130,20 @@ void SelfTest() {
     for (int i = 0; i < 600; ++i) {
         walk.Move(0.f, -1.f, 1.f / 60.f);
     }
-    if (walk.center.z != -9.7f) throw std::runtime_error("Harbor boundary failed");
-    std::puts("Sunset walk checks passed: movement, column collision, harbor boundary");
+    if (walk.center.z < -12.75f || walk.center.z > -12.70f) throw std::runtime_error("Harbor boundary failed");
+
+    Walk fishing;
+    fishing.center = {-2.f, .85f, -2.49f};
+    for (int step = 0; step < 350; ++step) fishing.Move(-1.f, 0.f, 1.f / 60.f);
+    if (fishing.center.x < -13.38f || fishing.center.x > -13.33f) throw std::runtime_error("Fishing dock route failed");
+    fishing.Move(0.f, 1.f, 1.f);
+    if (fishing.center.z != -2.49f) throw std::runtime_error("Fishing dock boundary failed");
+
+    Walk dining;
+    dining.center = {0.f, .85f, 14.f};
+    for (int step = 0; step < 260; ++step) dining.Move(0.f, 1.f, 1.f / 60.f);
+    if (dining.center.z < 24.7f) throw std::runtime_error("Restaurant route failed");
+    std::puts("Coastal walk checks passed: movement, column, end of pier, fishing dock, restaurant route");
 }
 
 void SavePpm(const fs::path& path, const std::vector<uint8_t>& rgba) {
@@ -151,7 +178,7 @@ int Capture(const fs::path& directory) {
             constexpr int kSamples = 6;
             for (int i = 0; i < kWarmup + kSamples; ++i) {
                 const auto start = std::chrono::steady_clock::now();
-                scene.Draw(renderer, camera, detail, time);
+                scene.Draw(renderer, camera, detail, time, PvDaylight(time));
                 renderer.EndFrame();
                 const auto time = std::chrono::duration<double, std::milli>(
                     std::chrono::steady_clock::now() - start).count();
@@ -164,9 +191,13 @@ int Capture(const fs::path& directory) {
         }
     }
     if (!measurements) throw std::runtime_error("Could not write capture samples");
-    scene.Draw(renderer, PvCamera(0.f), sunset::Detail::Detailed, .62f);
-    renderer.EndFrame();
-    SavePpm(directory / "wide-water-later.ppm", renderer.ReadOffscreenRgba());
+    const auto seaCamera = LookAt({-8.8f, 4.2f, -3.4f}, {-15.f, -.45f, 15.f});
+    for (const auto& [name, time, daylight] : {std::tuple{"sea-first.ppm", 5.f, .24f},
+             std::tuple{"sea-later.ppm", 5.62f, .24f}, std::tuple{"sea-dusk.ppm", 5.f, 1.f}}) {
+        scene.Draw(renderer, seaCamera, sunset::Detail::Detailed, time, daylight);
+        renderer.EndFrame();
+        SavePpm(directory / name, renderer.ReadOffscreenRgba());
+    }
     renderer.Shutdown();
     return 0;
 }
@@ -177,14 +208,19 @@ int RenderPv(const fs::path& directory) {
     renderer.Initialize(nullptr, kWidth, kHeight);
     if (!renderer.IsPbrAvailable() || !renderer.IsShadowEnabled()) throw std::runtime_error("Missing PBR or shadow pipeline");
     sunset::Scene scene(renderer);
+    std::ofstream listener(directory / "listener.csv");
+    listener << "frame,villa_gain\n";
     for (int frame = 0; frame < kPvFps * kPvSeconds; ++frame) {
         const float time = static_cast<float>(frame) / kPvFps;
-        scene.Draw(renderer, PvCamera(time), sunset::Detail::Detailed, time);
+        const auto camera = PvCamera(time);
+        listener << frame << ',' << sunset::VillaGain(camera.GetPosition()) << '\n';
+        scene.Draw(renderer, camera, sunset::Detail::Detailed, time, PvDaylight(time));
         renderer.EndFrame();
         char name[24];
         std::snprintf(name, sizeof(name), "frame-%04d.ppm", frame);
         SavePpm(directory / name, renderer.ReadOffscreenRgba());
     }
+    if (!listener) throw std::runtime_error("Could not write audio trajectory");
     renderer.Shutdown();
     return 0;
 }
@@ -195,26 +231,6 @@ void SetTitle(HWND window, sunset::Detail detail) {
         L" | WASD: Walk / Tab: Mouse / F2: Assets / R: Reset / Esc: Quit";
     SetWindowTextW(window, title.c_str());
 }
-
-class Ambience {
-public:
-    Ambience() {
-        wchar_t executable[32768];
-        const DWORD length = GetModuleFileNameW(nullptr, executable, static_cast<DWORD>(std::size(executable)));
-        if (length == 0 || length >= std::size(executable)) return;
-        const auto audio = fs::path(executable).parent_path() / L"sunset-ambience.wav";
-        if (fs::exists(audio)) {
-            m_playing = PlaySoundW(audio.c_str(), nullptr, SND_ASYNC | SND_FILENAME | SND_LOOP | SND_NODEFAULT);
-        }
-    }
-
-    ~Ambience() {
-        if (m_playing) PlaySoundW(nullptr, nullptr, 0);
-    }
-
-private:
-    bool m_playing = false;
-};
 
 int Play() {
     Window window;
@@ -231,7 +247,7 @@ int Play() {
 
     auto previous = std::chrono::steady_clock::now();
     float animationTime = 0.f;
-    const Ambience ambience;
+    sunset::CoastalAudio ambience;
     bool tabHeld = false;
     bool assetHeld = false;
     auto& input = window.GetInput();
@@ -265,7 +281,10 @@ int Play() {
         const float strafe = static_cast<float>(input.IsKeyDown('D') - input.IsKeyDown('A'));
         const float forward = static_cast<float>(input.IsKeyDown('W') - input.IsKeyDown('S'));
         walk.Move(strafe, forward, seconds);
-        scene.Draw(renderer, walk.View(), detail, animationTime);
+        const auto camera = walk.View();
+        ambience.Update(camera.GetPosition());
+        const float cycle = .5f - .5f * std::cos(animationTime * .028f);
+        scene.Draw(renderer, camera, detail, animationTime, cycle);
         renderer.EndFrame();
     }
     input.SetCursorLock(false, window.GetHandle());

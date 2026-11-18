@@ -47,6 +47,7 @@ jobs:
             sunset-evidence/pv-results.json
             sunset-evidence/Sunset-Resort-PV.mp4
             sunset-evidence/sunset-ambience.wav
+            sunset-evidence/villa-music.wav
             build-ci/Release/SunsetWalk.exe
             build-ci/Release/shaders/*.dxil
           if-no-files-found: error

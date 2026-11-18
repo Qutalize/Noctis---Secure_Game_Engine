@@ -30,7 +30,7 @@ cbuffer SceneConstants : register(b0)
     float4   gShadowParams;
     float4   gBaseColorFactor;
     float4   gMaterialParams;   // x=metallic, y=roughness, z=法線マップ強度, w=テクスチャフラグ
-    float4 gWaterParams;
+    float4 gCoastalParams;
 };
 
 #include "SunsetWaves.hlsli"
@@ -118,49 +118,54 @@ float3 FresnelSchlick(float cosTheta, float3 f0)
 
 float4 PSMain(PSInput input) : SV_Target
 {
-    if (gWaterParams.x > 0.5f) {
-        const float time = gWaterParams.y;
+    if (gCoastalParams.x > 2.5f) {
+        return float4(gBaseColorFactor.rgb * lerp(.15f, 1.f, gCoastalParams.w), 1.0f);
+    }
+    if (gCoastalParams.x > 1.5f) {
+        float3 direction = normalize(input.worldPos - gCameraPos.xyz);
+        return float4(saturate(CoastalSky(direction, normalize(-gLightDir.xyz),
+                                         gCoastalParams.z, gCoastalParams.w, gCoastalParams.y)), 1.0f);
+    }
+    if (gCoastalParams.x > 0.5f) {
+        const float time = gCoastalParams.y;
+        const float sunset = gCoastalParams.z;
+        const float dusk = gCoastalParams.w;
         const float2 seaPosition = input.worldPos.xz;
-        const float3 wave = WaveSurface(seaPosition, time);
+        const float wave = WaveSurface(seaPosition, time);
         const float distanceToEye = length(gCameraPos.xyz - input.worldPos);
-        const float fade = 1.0f - smoothstep(9.0f, 52.0f, distanceToEye);
-        const float horizon = smoothstep(24.0f, 105.0f, distanceToEye);
-        const float2 drift = float2(sin(dot(seaPosition, float2(1.27f, 0.93f)) + time * 0.51f),
-                                    sin(dot(seaPosition, float2(-0.89f, 1.14f)) - time * 0.43f));
-        const float2 ripple = 0.065f * fade * sin(seaPosition * float2(9.0f, 14.0f) +
-            drift.yx * 2.3f + time * float2(2.6f, -3.3f));
-        const float2 slope = (wave.yz + ripple) * lerp(1.0f, .28f, horizon);
+        const float horizon = smoothstep(30.0f, 145.0f, distanceToEye);
+        const float2 wind = seaPosition - time * float2(.25f, .36f);
+        const float2 patch = float2(CoastalNoise(wind * .19f), CoastalNoise(wind.yx * .31f));
+        const float2 rippleUV = wind * float2(2.8f, 6.5f) + patch * 2.3f;
+        const float footprint = max(length(ddx(rippleUV)), length(ddy(rippleUV)));
+        const float rippleGain = .055f * (1.0f - smoothstep(.22f, 1.15f, footprint));
+        const float2 ripple = float2(CoastalNoise(rippleUV) - .5f, CoastalNoise(rippleUV.yx + 3.41f) - .5f);
+        const float2 gradient = float2(WaveSurface(seaPosition + float2(.13f, 0), time) - wave,
+                                      WaveSurface(seaPosition + float2(0, .13f), time) - wave) / .13f;
+        const float2 slope = (gradient * .72f + ripple * rippleGain) * lerp(1.0f, .12f, horizon);
         const float3 normal = normalize(float3(-slope.x, 1.0f, -slope.y));
         const float3 view = normalize(gCameraPos.xyz - input.worldPos);
         const float3 reflected = reflect(-view, normal);
         const float3 sun = normalize(-gLightDir.xyz);
-        const float fresnel = 0.025f + 0.78f * pow(1.0f - saturate(dot(normal, view)), 5.0f);
-        const float elevation = 1.0f - exp(-max(reflected.y, 0.0f) * 4.0f);
-        const float3 sky = lerp(float3(0.70f, 0.39f, 0.30f),
-                                float3(0.16f, 0.30f, 0.53f), elevation);
+        const float fresnel = .025f + .82f * pow(1.0f - saturate(dot(normal, view)), 5.0f);
+        const float3 sky = CoastalSky(normalize(float3(reflected.x, max(.02f, reflected.y), reflected.z)),
+                                       sun, sunset, dusk, time);
         const float alignment = saturate(dot(reflected, sun));
-        const float sparkle = 0.65f + 0.35f * sin(dot(seaPosition, float2(7.13f, 11.39f)) +
-            2.2f * drift.x + time * 1.3f);
-        const float glint = pow(alignment, 48.0f) * 0.27f +
-            pow(alignment, lerp(168.0f, 86.0f, horizon)) * (0.82f + fade * sparkle);
-        const float2 pier = abs(seaPosition - float2(0.0f, 3.0f)) - float2(3.06f, 13.0f);
-        const float2 lodge = abs(seaPosition - float2(7.60f, 2.0f)) - float2(4.50f, 7.0f);
-        const float coast = min(length(max(pier, 0.0f)), length(max(lodge, 0.0f)));
-        const float foamPulse = sin(seaPosition.x * 4.1f - seaPosition.y * 2.4f + time * 2.1f + 2.6f * drift.x);
-        const float foamStreak = sin(seaPosition.x * 16.7f + seaPosition.y * 29.9f - time * 2.8f + 3.4f * drift.y);
-        const float wash = (1.0f - smoothstep(0.08f, .82f, coast)) *
-            smoothstep(0.02f, 0.89f, foamPulse * .72f + foamStreak * .28f * fade);
-        const float crest = smoothstep(0.139f, 0.213f, wave.x) * fade *
-            smoothstep(0.22f, 0.94f, drift.y);
+        const float sparkle = lerp(.44f, 1.0f, CoastalNoise(rippleUV * .42f));
+        const float glint = (pow(alignment, 100.0f) * .20f + pow(alignment, 580.0f) * sparkle * 1.25f) *
+            (1.0f - dusk) * smoothstep(-.02f, .08f, sun.y);
+        const float shore = seaPosition.y - Shoreline(seaPosition.x);
+        const float runup = .35f + .54f * CoastalNoise(float2(seaPosition.x * .64f, time * .58f));
+        const float foamLine = 1.0f - smoothstep(.13f, .46f, abs(shore - runup));
+        const float wash = foamLine * smoothstep(.30f, .72f, CoastalNoise(wind * float2(2.8f, 3.5f) + patch));
         const float shadow = ComputeShadow(input.worldPos, saturate(dot(normal, sun)));
-        const float3 tint = lerp(float3(0.041f, 0.126f, 0.185f),
-            float3(0.083f, 0.29f, 0.32f), saturate(wave.x * 3.0f + 0.44f));
+        const float3 tint = lerp(float3(.19f, .65f, .61f), float3(.056f, .32f, .45f),
+                                 smoothstep(.15f, 15.0f, shore + patch.x * 1.8f)) * lerp(1.0f, .34f, dusk);
         const float3 sea = lerp(tint, sky, fresnel) +
-            shadow * glint * float3(1.0f, 0.65f, 0.29f);
-        const float3 color = lerp(sea, float3(0.68f, 0.77f, 0.74f),
-                                  saturate(wash * 0.92f + crest * 0.65f));
-        const float3 mapped = color / (0.72f + 0.44f * color);
-        return float4(lerp(mapped, float3(.57f, .41f, .39f), .34f * horizon), 1.0f);
+            shadow * glint * lerp(float3(.83f, .91f, 1.f), float3(1.f, .64f, .35f), sunset);
+        const float3 foam = float3(.82f, .90f, .85f) * lerp(1.0f, .40f, dusk);
+        const float3 color = lerp(sea, foam, wash * .72f);
+        return float4(saturate(lerp(color, sky, .38f * horizon)), 1.0f);
     }
     const bool hasTextures = (gMaterialParams.w > 0.5f);
 
