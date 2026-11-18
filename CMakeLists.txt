@@ -383,6 +383,14 @@ if (DXC_EXE)
         add_custom_command(TARGET desert_road POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
                     "${SHADER_BIN_DIR}" "$<TARGET_FILE_DIR:desert_road>/shaders")
+        add_executable(inland_tour game/inland/Main.cpp game/inland/InlandScene.cpp
+                       game/desert/DesertScene.cpp game/GltfProp.cpp)
+        target_link_libraries(inland_tour PRIVATE engine)
+        set_target_properties(inland_tour PROPERTIES OUTPUT_NAME InlandTour)
+        add_dependencies(inland_tour shaders)
+        add_custom_command(TARGET inland_tour POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${SHADER_BIN_DIR}" "$<TARGET_FILE_DIR:inland_tour>/shaders")
     endif()
 else()
     if(BUILD_SUNSET_WALK)

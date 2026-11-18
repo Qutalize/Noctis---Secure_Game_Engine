@@ -8,14 +8,18 @@ import urllib.request
 
 from build_architecture import build_architecture
 from build_desert import build_desert
+from build_inland import build_inland
 
 
-def prepare(output, desert=False):
+def prepare(output, desert=False, inland=False):
     def manifest(filename):
         return json.loads(Path(__file__).with_name(filename).read_text(encoding="utf-8"))
 
     coastal = manifest("coastal-assets.json")
-    if desert:
+    if inland:
+        inventory = {"wood_planks_grey": manifest("architecture-materials.json")["wood_planks_grey"],
+                     **manifest("inland-materials.json")}
+    elif desert:
         architecture = manifest("architecture-materials.json")
         inventory = {"rock_face_01": coastal["rock_face_01"],
                      "large_sandstone_blocks_01": architecture["large_sandstone_blocks_01"],
@@ -54,7 +58,9 @@ def prepare(output, desert=False):
             else:
                 target.write_bytes(original)
         print(f"Verified CC0 asset: {model} ({len(files)} source files)")
-    if desert:
+    if inland:
+        build_inland(output)
+    elif desert:
         build_desert(output)
     else:
         build_architecture(output)
@@ -63,6 +69,8 @@ def prepare(output, desert=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("output", type=Path)
-    parser.add_argument("--desert", action="store_true")
+    scene = parser.add_mutually_exclusive_group()
+    scene.add_argument("--desert", action="store_true")
+    scene.add_argument("--inland", action="store_true")
     args = parser.parse_args()
-    prepare(args.output, args.desert)
+    prepare(args.output, args.desert, args.inland)

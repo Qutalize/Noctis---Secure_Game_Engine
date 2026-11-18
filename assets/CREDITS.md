@@ -262,3 +262,17 @@ RGB(125,107,90)）/ サイズ 0.067 x 0.251 x 0.868m（実寸の AK-47 とほぼ
 `models/creator/two-bone.glb`、`two-bone.fbx`、`two-bone-binary.fbx`は、このプロジェクトで作成した2ボーンの帯状モデルとSwing/Lift試験アニメーションです。CC0として提供します。外部ゲームの素材は含めません。生成ソースは`tools/advisor/model_fixtures.py`です。
 
 FBXのビルド時変換にはufbx 0.23.1を使用します。ソース・ライセンス・固定版の記録は`third_party/ufbx/`に保存しています。ゲームパッケージにはufbxをリンクしません。
+
+## Inland Tour
+
+地形、植生、遊歩道、工場建屋、タンク、配管、灯具は寸法と配置を定義したプロジェクト独自の glTF モデル。制作元は `tools/sunset/inland-layout.json` と `tools/sunset/build_inland.py`。
+
+| 用途 | Poly Haven CC0 素材 | 制作者 |
+|---|---|---|
+| 草地 | [Sparse Grass](https://polyhaven.com/a/sparse_grass) | Amal Kumar |
+| 湿地の泥、土道 | [Mud Forest](https://polyhaven.com/a/mud_forest) | eye-candy.xyz |
+| 湿地の木道 | [Wood Planks Grey](https://polyhaven.com/a/wood_planks_grey) | Poly Haven |
+| 建屋の屋根、タンク | [Corrugated Iron](https://polyhaven.com/a/corrugated_iron) | Dimitrios Savva、Jenelle van Heerden |
+| 外壁、煙突、配管 | [Rusty Corrugated Iron](https://polyhaven.com/a/rusty_corrugated_iron) | Charlotte Baglioni |
+
+写真素材の配布元 URL と SHA-256 は `tools/sunset/inland-materials.json` と `tools/sunset/architecture-materials.json` に記録。

@@ -123,6 +123,28 @@ float3 FresnelSchlick(float cosTheta, float3 f0)
 
 float4 PSMain(PSInput input) : SV_Target
 {
+    if (gCoastalParams.x > 3.5f) {
+        const float time = gCoastalParams.y;
+        const float2 world = input.worldPos.xz;
+        const float2 drift = world * .84f + time * float2(.26f, -.14f);
+        const float phase = CoastalNoise(drift * .43f);
+        const float2 ripples = float2(CoastalNoise(drift * 3.6f + phase),
+                                      CoastalNoise(drift.yx * 4.1f - phase)) - .5f;
+        const float rippleFilter = 1.f - smoothstep(.08f, .47f, length(fwidth(world)));
+        const float3 normal = normalize(float3(ripples.x * .25f * rippleFilter, 1.f,
+                                                ripples.y * .28f * rippleFilter));
+        const float3 view = normalize(gCameraPos.xyz - input.worldPos);
+        const float3 ray = reflect(-view, normal);
+        const float3 sun = normalize(-gLightDir.xyz);
+        const float3 sky = CoastalSky(normalize(float3(ray.x, max(.035f, ray.y), ray.z)),
+                                      sun, gCoastalParams.z, gCoastalParams.w, time);
+        const float depth = saturate(input.uv.x * 1.32f);
+        const float silt = lerp(.65f, 1.25f, CoastalNoise(world * 1.9f + ripples * .29f));
+        const float3 bed = lerp(float3(.32f, .27f, .16f) * silt, float3(.086f, .20f, .15f), depth);
+        const float fresnel = .07f + .87f * pow(1.f - saturate(dot(view, normal)), 4.5f);
+        const float sparkle = pow(saturate(dot(ray, sun)), 84.f) * .58f;
+        return float4(saturate(lerp(bed, sky, fresnel) + sparkle * float3(1.f, .69f, .35f)), 1.f);
+    }
     if (gCoastalParams.x > 2.5f) {
         return float4(gBaseColorFactor.rgb * lerp(.15f, 1.f, gCoastalParams.w), 1.0f);
     }

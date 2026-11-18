@@ -89,3 +89,9 @@ void GltfProp::Draw(Renderer& renderer, const XMMATRIX& world, bool ignoreDepth)
         }
     }
 }
+
+void GltfProp::SetScenicEffect(const XMFLOAT4& params) {
+    for (auto& part : m_parts) {
+        part.pbrMaterial.coastalParams = params;
+    }
+}

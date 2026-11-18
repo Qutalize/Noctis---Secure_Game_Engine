@@ -34,6 +34,7 @@ public:
     // 読み込み済みの全パーツを指定 world 行列で描く。ignoreDepth=true で深度無視
     // （一人称ビューモデルのように常に手前へ描きたい場合に使う）。
     void Draw(Renderer& renderer, const DirectX::XMMATRIX& world, bool ignoreDepth = false) const;
+    void SetScenicEffect(const DirectX::XMFLOAT4& params);
 
 private:
     struct Part {
