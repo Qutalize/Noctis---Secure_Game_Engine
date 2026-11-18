@@ -4,12 +4,15 @@
 #include "engine/core/Window.h"
 #include "engine/math/Collision.h"
 
+#include <mmsystem.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -21,6 +24,9 @@ namespace fs = std::filesystem;
 namespace {
 constexpr int kWidth = 960;
 constexpr int kHeight = 540;
+constexpr int kPvFps = 24;
+constexpr int kPvSeconds = 12;
+constexpr float kCloseTime = 10.5f;
 constexpr float kEyeHeight = 1.62f;
 constexpr float kSpeed = 2.5f;
 constexpr XMFLOAT3 kHalfBody{.25f, .80f, .25f};
@@ -58,6 +64,36 @@ struct Walk {
         return camera;
     }
 };
+
+Camera LookAt(const XMFLOAT3& eye, const XMFLOAT3& target) {
+    Camera camera;
+    camera.SetPosition(eye);
+    const float right = target.x - eye.x;
+    const float forward = target.z - eye.z;
+    camera.SetRotation(std::atan2(right, forward), std::atan2(target.y - eye.y, std::hypot(right, forward)));
+    return camera;
+}
+
+float Ease(float progress) {
+    const float fraction = std::clamp(progress, 0.f, 1.f);
+    return fraction * fraction * (3.f - 2.f * fraction);
+}
+
+Camera PvCamera(float time) {
+    if (time < 4.5f) {
+        const float amount = Ease(time / 4.5f);
+        return LookAt({std::lerp(-9.6f, -8.2f, amount), std::lerp(5.2f, 4.2f, amount),
+                       std::lerp(-15.4f, -12.8f, amount)}, {-.40f, 1.3f, 11.5f});
+    }
+    if (time < 8.5f) {
+        const float amount = Ease((time - 4.5f) / 4.f);
+        return LookAt({std::lerp(-2.22f, -.85f, amount), 1.71f, std::lerp(-7.75f, -4.12f, amount)},
+                      {1.10f, 1.47f, 5.85f});
+    }
+    const float amount = Ease((time - 8.5f) / 3.5f);
+    return LookAt({std::lerp(.68f, 1.25f, amount), std::lerp(1.50f, 1.37f, amount), -2.57f},
+                  {3.17f, 1.21f, 1.25f});
+}
 
 void SelfTest() {
     Walk walk;
@@ -105,23 +141,17 @@ int Capture(const fs::path& directory) {
     if (!renderer.IsPbrAvailable() || !renderer.IsShadowEnabled()) throw std::runtime_error("Missing PBR or shadow pipeline");
     sunset::Scene scene(renderer);
 
-    Walk wide;
-    Walk close;
-    close.center = {-.70f, .85f, -.95f};
-    close.yaw = .21f;
-    close.pitch = .16f;
-
     std::ofstream measurements(directory / "samples.csv");
     measurements << "shot,asset,asset_triangles,sample,warp_cpu_submit_wait_ms\n";
-    for (const auto& [shot, walk] : {std::pair{"wide", wide}, std::pair{"close", close}}) {
+    for (const auto& [shot, time] : {std::pair{"wide", 0.f}, std::pair{"close", kCloseTime}}) {
         for (const auto detail : {sunset::Detail::Simple, sunset::Detail::Detailed}) {
             const std::string asset = detail == sunset::Detail::Simple ? "simple" : "detailed";
-            const auto camera = walk.View();
+            const auto camera = PvCamera(time);
             constexpr int kWarmup = 2;
             constexpr int kSamples = 6;
             for (int i = 0; i < kWarmup + kSamples; ++i) {
                 const auto start = std::chrono::steady_clock::now();
-                scene.Draw(renderer, camera, detail);
+                scene.Draw(renderer, camera, detail, time);
                 renderer.EndFrame();
                 const auto time = std::chrono::duration<double, std::milli>(
                     std::chrono::steady_clock::now() - start).count();
@@ -134,6 +164,27 @@ int Capture(const fs::path& directory) {
         }
     }
     if (!measurements) throw std::runtime_error("Could not write capture samples");
+    scene.Draw(renderer, PvCamera(0.f), sunset::Detail::Detailed, .62f);
+    renderer.EndFrame();
+    SavePpm(directory / "wide-water-later.ppm", renderer.ReadOffscreenRgba());
+    renderer.Shutdown();
+    return 0;
+}
+
+int RenderPv(const fs::path& directory) {
+    if (!fs::create_directory(directory)) throw std::runtime_error("PV frame directory must be new");
+    Renderer renderer;
+    renderer.Initialize(nullptr, kWidth, kHeight);
+    if (!renderer.IsPbrAvailable() || !renderer.IsShadowEnabled()) throw std::runtime_error("Missing PBR or shadow pipeline");
+    sunset::Scene scene(renderer);
+    for (int frame = 0; frame < kPvFps * kPvSeconds; ++frame) {
+        const float time = static_cast<float>(frame) / kPvFps;
+        scene.Draw(renderer, PvCamera(time), sunset::Detail::Detailed, time);
+        renderer.EndFrame();
+        char name[24];
+        std::snprintf(name, sizeof(name), "frame-%04d.ppm", frame);
+        SavePpm(directory / name, renderer.ReadOffscreenRgba());
+    }
     renderer.Shutdown();
     return 0;
 }
@@ -144,6 +195,26 @@ void SetTitle(HWND window, sunset::Detail detail) {
         L" | WASD: Walk / Tab: Mouse / F2: Assets / R: Reset / Esc: Quit";
     SetWindowTextW(window, title.c_str());
 }
+
+class Ambience {
+public:
+    Ambience() {
+        wchar_t executable[32768];
+        const DWORD length = GetModuleFileNameW(nullptr, executable, static_cast<DWORD>(std::size(executable)));
+        if (length == 0 || length >= std::size(executable)) return;
+        const auto audio = fs::path(executable).parent_path() / L"sunset-ambience.wav";
+        if (fs::exists(audio)) {
+            m_playing = PlaySoundW(audio.c_str(), nullptr, SND_ASYNC | SND_FILENAME | SND_LOOP | SND_NODEFAULT);
+        }
+    }
+
+    ~Ambience() {
+        if (m_playing) PlaySoundW(nullptr, nullptr, 0);
+    }
+
+private:
+    bool m_playing = false;
+};
 
 int Play() {
     Window window;
@@ -159,6 +230,8 @@ int Play() {
     SetTitle(window.GetHandle(), detail);
 
     auto previous = std::chrono::steady_clock::now();
+    float animationTime = 0.f;
+    const Ambience ambience;
     bool tabHeld = false;
     bool assetHeld = false;
     auto& input = window.GetInput();
@@ -168,6 +241,7 @@ int Play() {
         const auto now = std::chrono::steady_clock::now();
         const float seconds = std::min(.05f, std::chrono::duration<float>(now - previous).count());
         previous = now;
+        animationTime += seconds;
 
         const bool tab = input.IsKeyDown(VK_TAB);
         if (tab && !tabHeld) input.SetCursorLock(!input.IsCursorLocked(), window.GetHandle());
@@ -191,7 +265,7 @@ int Play() {
         const float strafe = static_cast<float>(input.IsKeyDown('D') - input.IsKeyDown('A'));
         const float forward = static_cast<float>(input.IsKeyDown('W') - input.IsKeyDown('S'));
         walk.Move(strafe, forward, seconds);
-        scene.Draw(renderer, walk.View(), detail);
+        scene.Draw(renderer, walk.View(), detail, animationTime);
         renderer.EndFrame();
     }
     input.SetCursorLock(false, window.GetHandle());
@@ -210,7 +284,8 @@ int wmain(int argc, wchar_t** argv) {
             return 0;
         }
         if (argc == 3 && operation == L"--capture") return Capture(argv[2]);
-        throw std::runtime_error("Usage: SunsetWalk.exe [--self-test | --capture NEW_DIRECTORY]");
+        if (argc == 3 && operation == L"--pv-frames") return RenderPv(argv[2]);
+        throw std::runtime_error("Usage: SunsetWalk.exe [--self-test | --capture NEW_DIRECTORY | --pv-frames NEW_DIRECTORY]");
     } catch (const std::exception& error) {
         std::fprintf(stderr, "SunsetWalk: %s\n", error.what());
         return 1;

@@ -8,7 +8,7 @@ enum class Detail { Simple, Detailed };
 class Scene {
 public:
     explicit Scene(Renderer& renderer);
-    void Draw(Renderer& renderer, const Camera& camera, Detail detail) const;
+    void Draw(Renderer& renderer, const Camera& camera, Detail detail, float time);
     std::size_t TriangleCount(Detail detail) const;
 
 private:
@@ -22,6 +22,10 @@ private:
     Mesh m_islands;
     Mesh m_water;
     PbrMaterial m_waterMaterial;
+    Mesh m_resort;
+    Mesh m_boat;
+    Mesh m_leftWing;
+    Mesh m_rightWing;
     Buildings m_simple;
     Buildings m_detailed;
 };

@@ -81,7 +81,22 @@ def main(directory):
         }
     if results["wide"]["assets"] == results["close"]["assets"]:
         raise ValueError("Both camera shots rendered identical evidence")
-    report = {"adapter": "D3D12 WARP", "resolution": [WIDTH, HEIGHT], "shots": results}
+    first = read_ppm(directory / "wide-detailed.ppm")
+    later = read_ppm(directory / "wide-water-later.ppm")
+    left_sea_pixels = [3 * (row * WIDTH + column)
+                       for row in range(340, 470) for column in range(40, 290)]
+    changed_sea = sum(max(abs(first[offset + channel] - later[offset + channel])
+                          for channel in range(3)) > 8 for offset in left_sea_pixels)
+    if changed_sea < len(left_sea_pixels) * .02:
+        raise ValueError("Sea appears static in the fixed-camera temporal comparison")
+    write_png(directory / "wide-water-later.png", later)
+    report = {
+        "adapter": "D3D12 WARP", "resolution": [WIDTH, HEIGHT], "shots": results,
+        "wide_fixed_camera_sea_motion": {
+            "time_delta_s": .62, "roi_xyxy": [40, 340, 290, 470],
+            "percent_pixels_with_any_rgb_difference_gt_8": round(100 * changed_sea / len(left_sea_pixels), 2),
+        },
+    }
     encoded = json.dumps(report, indent=2)
     (directory / "results.json").write_text(encoded + "\n", encoding="utf-8")
     print(encoded)

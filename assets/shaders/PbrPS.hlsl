@@ -30,7 +30,10 @@ cbuffer SceneConstants : register(b0)
     float4   gShadowParams;
     float4   gBaseColorFactor;
     float4   gMaterialParams;   // x=metallic, y=roughness, z=法線マップ強度, w=テクスチャフラグ
+    float4 gWaterParams;
 };
+
+#include "SunsetWaves.hlsli"
 
 Texture2D gBaseColorMap : register(t0);
 Texture2D gNormalMap    : register(t1);
@@ -115,6 +118,46 @@ float3 FresnelSchlick(float cosTheta, float3 f0)
 
 float4 PSMain(PSInput input) : SV_Target
 {
+    if (gWaterParams.x > 0.5f) {
+        const float time = gWaterParams.y;
+        const float2 point = input.worldPos.xz;
+        const float3 wave = WaveSurface(point, time);
+        const float fade = 1.0f - smoothstep(10.0f, 55.0f, length(gCameraPos.xyz - input.worldPos));
+        const float2 drift = float2(sin(dot(point, float2(1.27f, 0.93f)) + time * 0.51f),
+                                    sin(dot(point, float2(-0.89f, 1.14f)) - time * 0.43f));
+        const float2 ripple = 0.065f * fade * sin(point * float2(9.0f, 14.0f) +
+            drift.yx * 2.3f + time * float2(2.6f, -3.3f));
+        const float2 slope = wave.yz + ripple;
+        const float3 normal = normalize(float3(-slope.x, 1.0f, -slope.y));
+        const float3 view = normalize(gCameraPos.xyz - input.worldPos);
+        const float3 reflected = reflect(-view, normal);
+        const float3 sun = normalize(-gLightDir.xyz);
+        const float fresnel = 0.025f + 0.78f * pow(1.0f - saturate(dot(normal, view)), 5.0f);
+        const float elevation = 1.0f - exp(-max(reflected.y, 0.0f) * 4.0f);
+        const float3 sky = lerp(float3(0.70f, 0.39f, 0.30f),
+                                float3(0.16f, 0.30f, 0.53f), elevation);
+        const float alignment = saturate(dot(reflected, sun));
+        const float sparkle = 0.65f + 0.35f * sin(dot(point, float2(7.13f, 11.39f)) +
+            2.2f * drift.x + time * 1.3f);
+        const float glint = pow(alignment, 52.0f) * 0.33f +
+            pow(alignment, 230.0f) * (1.1f + fade * sparkle);
+        const float2 pier = abs(point - float2(0.0f, 3.0f)) - float2(3.06f, 13.0f);
+        const float2 lodge = abs(point - float2(7.60f, 2.0f)) - float2(4.50f, 7.0f);
+        const float coast = min(length(max(pier, 0.0f)), length(max(lodge, 0.0f)));
+        const float foamPulse = sin(point.x * 4.1f - point.y * 2.4f + time * 2.1f + 2.0f * drift.x);
+        const float wash = (1.0f - smoothstep(0.12f, 1.08f, coast)) *
+            smoothstep(0.12f, 0.88f, foamPulse);
+        const float crest = smoothstep(0.139f, 0.213f, wave.x) * fade *
+            smoothstep(0.22f, 0.94f, drift.y);
+        const float shadow = ComputeShadow(input.worldPos, saturate(dot(normal, sun)));
+        const float3 tint = lerp(float3(0.041f, 0.126f, 0.185f),
+            float3(0.083f, 0.29f, 0.32f), saturate(wave.x * 3.0f + 0.44f));
+        const float3 sea = lerp(tint, sky, fresnel) +
+            shadow * glint * float3(1.0f, 0.65f, 0.29f);
+        const float3 color = lerp(sea, float3(0.68f, 0.77f, 0.74f),
+                                  saturate(wash * 0.92f + crest * 0.65f));
+        return float4(color / (0.72f + 0.44f * color), 1.0f);
+    }
     const bool hasTextures = (gMaterialParams.w > 0.5f);
 
     // --- マテリアル値の取得 ---

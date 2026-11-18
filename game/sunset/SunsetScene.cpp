@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <initializer_list>
 #include <numbers>
 #include <vector>
 
@@ -22,20 +23,45 @@ float Pattern(float x, float y) {
         .25f * std::sin(x * 41.8f - y * 19.9f);
 }
 
+float CloudNoise(float x, float y) {
+    const float cellX = std::floor(x);
+    const float cellY = std::floor(y);
+    const auto sample = [](float column, float row) {
+        const float value = 4375.854f * std::sin(column * 12.9898f + row * 78.233f);
+        return value - std::floor(value);
+    };
+    const float u = x - cellX;
+    const float v = y - cellY;
+    const float blendX = u * u * (3.f - 2.f * u);
+    const float blendY = v * v * (3.f - 2.f * v);
+    return Mix(Mix(sample(cellX, cellY), sample(cellX + 1.f, cellY), blendX),
+               Mix(sample(cellX, cellY + 1.f), sample(cellX + 1.f, cellY + 1.f), blendX), blendY);
+}
+
 XMFLOAT4 SkyColor(const XMFLOAT3& direction) {
     const float height = std::clamp(direction.y, 0.f, 1.f);
     const float upper = 1.f - std::exp(-height * 4.f);
     const float alignment = std::clamp(direction.x * kSun.x + direction.y * kSun.y +
                                        direction.z * kSun.z, 0.f, 1.f);
-    const float glow = std::pow(alignment, 36.f) * .44f;
-    return {Mix(.78f, .16f, upper) + glow,
-            Mix(.42f, .28f, upper) + glow * .48f,
-            Mix(.33f, .46f, upper) + glow * .10f, 1.f};
+    const float glow = std::pow(alignment, 33.f) * .34f;
+    const float halo = std::pow(alignment, 280.f) * .16f;
+    const float spread = std::max(.10f, height + .16f);
+    const float cloudX = (direction.x + .27f * direction.z) / spread * 3.4f + 4.7f;
+    const float cloudY = direction.z / spread * 9.5f;
+    const float density = .61f * CloudNoise(cloudX, cloudY) +
+        .27f * CloudNoise(cloudX * 2.2f, cloudY * 2.2f) +
+        .12f * CloudNoise(cloudX * 4.3f, cloudY * 4.3f);
+    const float cloud = std::clamp((density - .51f) * 4.f, 0.f, .86f) *
+        std::clamp((height - .028f) * 12.f, 0.f, 1.f);
+    const float rim = .25f * std::pow(alignment, 11.f) + .17f * (1.f - cloud);
+    return {Mix(Mix(.79f, .18f, upper) + glow + halo, .30f + rim, cloud),
+            Mix(Mix(.44f, .33f, upper) + glow * .59f + halo * .80f, .30f + rim * .57f, cloud),
+            Mix(Mix(.30f, .56f, upper) + glow * .22f + halo * .44f, .42f + rim * .27f, cloud), 1.f};
 }
 
 Mesh Sky(Renderer& renderer) {
-    constexpr int rings = 72;
-    constexpr int segments = 144;
+    constexpr int rings = 126;
+    constexpr int segments = 256;
     constexpr float radius = 165.f;
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
@@ -54,9 +80,8 @@ Mesh Sky(Renderer& renderer) {
             }
         }
     }
-    // Model the sun disk separately from the coarse grid used for the atmospheric glow.
     constexpr int diskSegments = 32;
-    constexpr float diskRadius = 2.75f;
+    constexpr float diskRadius = 1.95f;
     const XMVECTOR center = XMVector3Normalize(XMLoadFloat3(&kSun)) * (radius - 1.f);
     const XMVECTOR right = XMVector3Normalize(XMVector3Cross(XMVectorSet(0, 1, 0, 0), center));
     const XMVECTOR up = XMVector3Normalize(XMVector3Cross(center, right));
@@ -104,7 +129,7 @@ struct MeshData {
     std::vector<PbrVertex> vertices;
     std::vector<uint32_t> indices;
 
-    void Quad(const std::array<XMFLOAT3, 4>& corners, bool worldUv = false) {
+    void Quad(const std::array<XMFLOAT3, 4>& corners) {
         const XMVECTOR first = XMLoadFloat3(&corners[0]);
         const XMVECTOR tangent = XMVector3Normalize(XMLoadFloat3(&corners[1]) - first);
         const XMVECTOR normal = XMVector3Normalize(XMVector3Cross(
@@ -118,8 +143,7 @@ struct MeshData {
         constexpr XMFLOAT2 uv[] = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
         const auto base = static_cast<uint32_t>(vertices.size());
         for (std::size_t i = 0; i < corners.size(); ++i) {
-            const XMFLOAT2 coords = worldUv ? XMFLOAT2{corners[i].x * .35f, corners[i].z * .35f} : uv[i];
-            vertices.push_back({corners[i], normalValue, tangentValue, coords});
+            vertices.push_back({corners[i], normalValue, tangentValue, uv[i]});
         }
         indices.insert(indices.end(), {base, base + 1, base + 2, base, base + 2, base + 3});
     }
@@ -195,7 +219,9 @@ void Arch(MeshData& mesh, float x, float z, bool detailed) {
 
 MeshData Harbor(bool detailed) {
     MeshData data;
-    StoneBox(data, -3.05f, -.68f, -10.f, 6.10f, .67f, 26.f);
+    StoneBox(data, -3.05f, -1.05f, -10.f, 6.10f, 1.04f, 26.f);
+    StoneBox(data, 3.10f, -1.05f, -5.f, 9.f, 1.04f, 14.f);
+    StoneBox(data, 3.04f, -.06f, -4.5f, 1.30f, .06f, 13.f);
     if (detailed) {
         for (int z = -10; z < 16; ++z) {
             const float shift = z % 2 == 0 ? .0f : .2f;
@@ -215,9 +241,24 @@ MeshData Harbor(bool detailed) {
         }
     }
     StoneBox(data, 1.85f, -.55f, 13.f, 1.2f, 3.8f, 2.8f);
+    StoneBox(data, 7.05f, 0.f, 3.50f, 4.73f, .18f, 4.80f);
+    for (const float z : {-1.7f, 1.2f, 4.2f}) {
+        StoneBox(data, 3.72f, 0.f, z, .28f, 1.11f, .30f);
+        StoneBox(data, 3.45f, 1.11f, z - .22f, .82f, .09f, .74f);
+        if (detailed) {
+            StoneBox(data, 3.57f, .04f, z - .15f, .58f, .14f, .60f);
+            StoneBox(data, 3.58f, 1.02f, z - .11f, .56f, .09f, .52f);
+        }
+    }
     if (detailed) {
         for (int i = 0; i < 8; ++i) {
             StoneBox(data, 1.82f, i * .43f, 12.94f, 1.26f, .025f, 2.9f);
+        }
+        for (int row = 0; row < 18; ++row) {
+            for (int column = 0; column < 11; ++column) {
+                StoneBox(data, 3.17f + column * .805f, -.015f, -4.91f + row * .77f,
+                         .766f, .024f, .729f);
+            }
         }
     }
     return data;
@@ -241,15 +282,15 @@ Texture StoneTexture(Renderer& renderer) {
     return renderer.CreateTexture(edge, edge, pixels.data());
 }
 
-Texture WaterNormals(Renderer& renderer) {
+Texture StoneNormals(Renderer& renderer) {
     constexpr unsigned edge = 128;
     std::vector<uint8_t> pixels(edge * edge * 4);
     for (unsigned y = 0; y < edge; ++y) {
         for (unsigned x = 0; x < edge; ++x) {
             const float u = static_cast<float>(x) * 2.f * kPi / edge;
             const float v = static_cast<float>(y) * 2.f * kPi / edge;
-            const float dx = .19f * std::cos(2.f * u + 5.f * v) + .10f * std::cos(u - 7.f * v);
-            const float dy = .28f * std::cos(u + 6.f * v) + .11f * std::sin(4.f * u - 3.f * v);
+            const float dx = .12f * std::cos(6.f * u + 4.f * v) + .09f * std::cos(13.f * u - 7.f * v);
+            const float dy = .14f * std::cos(3.f * u + 8.f * v) + .08f * std::sin(10.f * u - 17.f * v);
             const auto at = (y * edge + x) * 4;
             pixels[at] = static_cast<uint8_t>(127.5f * (1.f + dx));
             pixels[at + 1] = static_cast<uint8_t>(127.5f * (1.f + dy));
@@ -259,48 +300,187 @@ Texture WaterNormals(Renderer& renderer) {
     }
     return renderer.CreateTexture(edge, edge, pixels.data());
 }
+
+Mesh SeaGrid(Renderer& renderer) {
+    std::vector<float> columns;
+    std::vector<float> rows;
+    for (float x = -148.f; x < 148.f; x += std::abs(x) > 34.f ? 3.f : .30f) columns.push_back(x);
+    columns.push_back(148.f);
+    for (float z = -58.f; z < 135.f; z += z < -18.f || z > 44.f ? 2.2f : .30f) rows.push_back(z);
+    rows.push_back(135.f);
+    std::vector<PbrVertex> vertices;
+    std::vector<uint32_t> indices;
+    const auto stride = static_cast<uint32_t>(columns.size());
+    for (std::size_t row = 0; row < rows.size(); ++row) {
+        for (std::size_t column = 0; column < columns.size(); ++column) {
+            vertices.push_back({{columns[column], -.64f, rows[row]}, {0, 1, 0}, {1, 0, 0, -1}, {0, 0}});
+            if (row + 1 < rows.size() && column + 1 < columns.size()) {
+                const auto index = static_cast<uint32_t>(row * stride + column);
+                indices.insert(indices.end(), {index, index + 1, index + stride, index + 1,
+                                               index + stride + 1, index + stride});
+            }
+        }
+    }
+    return renderer.CreatePbrMesh(vertices, indices);
+}
+
+struct ColoredMesh {
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+
+    void Face(std::initializer_list<XMFLOAT3> positions, XMFLOAT4 color) {
+        const auto point = positions.begin();
+        const auto origin = XMLoadFloat3(point);
+        XMFLOAT3 normal;
+        XMStoreFloat3(&normal, XMVector3Normalize(XMVector3Cross(XMLoadFloat3(point + 2) - origin,
+                                                               XMLoadFloat3(point + 1) - origin)));
+        const auto base = static_cast<uint32_t>(vertices.size());
+        for (const auto& position : positions) vertices.push_back({position, normal, color});
+        for (uint32_t corner = 1; corner + 1 < positions.size(); ++corner) {
+            indices.insert(indices.end(), {base, base + corner, base + corner + 1});
+        }
+    }
+
+    void Box(float x, float y, float z, float width, float height, float length, XMFLOAT4 color) {
+        const float right = x + width, top = y + height, back = z + length;
+        Face({{x, y, z}, {right, y, z}, {right, top, z}, {x, top, z}}, color);
+        Face({{right, y, back}, {x, y, back}, {x, top, back}, {right, top, back}}, color);
+        Face({{x, y, back}, {x, y, z}, {x, top, z}, {x, top, back}}, color);
+        Face({{right, y, z}, {right, y, back}, {right, top, back}, {right, top, z}}, color);
+        Face({{x, top, z}, {right, top, z}, {right, top, back}, {x, top, back}}, color);
+    }
+
+    Mesh Upload(Renderer& renderer) const { return renderer.CreateMesh(vertices, indices); }
+};
+
+Mesh Resort(Renderer& renderer) {
+    ColoredMesh data;
+    const XMFLOAT4 plaster{.76f, .55f, .34f, 1.f};
+    const XMFLOAT4 tiles{.48f, .18f, .11f, 1.f};
+    const XMFLOAT4 teak{.31f, .16f, .095f, 1.f};
+    const XMFLOAT4 glass{.13f, .27f, .34f, 1.f};
+    const XMFLOAT4 lamplight{1.f, .62f, .28f, 1.f};
+    data.Box(7.42f, .18f, 4.02f, 4.19f, 2.65f, 4.17f, plaster);
+    data.Box(7.23f, 2.71f, 3.80f, 4.58f, .12f, 4.60f, teak);
+    data.Face({{7.18f, 2.82f, 3.73f}, {9.50f, 3.83f, 3.73f},
+               {9.50f, 3.83f, 8.46f}, {7.18f, 2.82f, 8.46f}}, tiles);
+    data.Face({{9.50f, 3.83f, 3.73f}, {11.87f, 2.82f, 3.73f},
+               {11.87f, 2.82f, 8.46f}, {9.50f, 3.83f, 8.46f}}, tiles);
+    data.Face({{11.87f, 2.82f, 3.74f}, {9.50f, 3.83f, 3.74f}, {7.18f, 2.82f, 3.74f}}, plaster);
+    data.Face({{7.18f, 2.82f, 8.45f}, {9.50f, 3.83f, 8.45f}, {11.87f, 2.82f, 8.45f}}, plaster);
+    for (int room = 0; room < 3; ++room) {
+        const float z = 4.34f + room * 1.18f;
+        data.Box(7.38f, .39f, z, .095f, 1.84f, .90f, teak);
+        data.Box(7.35f, .47f, z + .065f, .04f, 1.68f, .77f, glass);
+        data.Box(7.32f, 1.23f, z + .07f, .04f, .054f, .76f, teak);
+        data.Box(7.31f, .48f, z + .44f, .04f, 1.66f, .032f, teak);
+        data.Box(7.10f, 2.02f, z + .93f, .23f, .21f, .17f, lamplight);
+    }
+    data.Box(7.05f, 2.31f, 4.06f, .29f, .11f, 4.13f, teak);
+    for (const float z : {-2.4f, .90f, 4.12f}) {
+        constexpr float center = 5.25f;
+        data.Box(center - .034f, 0.f, z - .034f, .068f, 2.29f, .068f, teak);
+        for (int panel = 0; panel < 12; ++panel) {
+            const float start = 2.f * kPi * panel / 12.f;
+            const float end = 2.f * kPi * (panel + 1) / 12.f;
+            const XMFLOAT4 canvas = panel % 2 == 0 ? XMFLOAT4{.86f, .79f, .62f, 1.f}
+                : XMFLOAT4{.12f, .40f, .44f, 1.f};
+            data.Face({{center, 2.38f, z}, {center + 1.12f * std::cos(start), 1.88f, z + 1.12f * std::sin(start)},
+                       {center + 1.12f * std::cos(end), 1.88f, z + 1.12f * std::sin(end)}}, canvas);
+        }
+        for (const float offset : {-.72f, .30f}) {
+            const float x = center + offset;
+            data.Box(x, .10f, z - .92f, .57f, .10f, 1.62f, teak);
+            data.Box(x + .045f, .20f, z - .82f, .48f, .09f, 1.27f, plaster);
+            data.Face({{x + .04f, .29f, z + .07f}, {x + .53f, .29f, z + .07f},
+                       {x + .53f, .64f, z + .59f}, {x + .04f, .64f, z + .59f}}, plaster);
+        }
+    }
+    return data.Upload(renderer);
+}
+
+Mesh Boat(Renderer& renderer) {
+    ColoredMesh data;
+    const XMFLOAT4 wood{.27f, .13f, .10f, 1.f};
+    const XMFLOAT4 sail{.87f, .78f, .61f, 1.f};
+    data.Box(-.48f, -.14f, -1.10f, .96f, .37f, 2.f, wood);
+    data.Face({{-.48f, .23f, .90f}, { .48f, .23f, .90f}, {0.f, .23f, 1.61f}}, wood);
+    data.Face({{.48f, .23f, .90f}, {0.f, -.10f, 1.42f}, {0.f, .23f, 1.61f}}, wood);
+    data.Face({{0.f, .23f, 1.61f}, {0.f, -.10f, 1.42f}, {-.48f, .23f, .90f}}, wood);
+    data.Box(-.04f, .20f, .24f, .08f, 3.45f, .08f, wood);
+    data.Face({{0.f, 3.49f, .24f}, {-.13f, .55f, -1.06f}, {0.f, .55f, .19f}}, sail);
+    return data.Upload(renderer);
+}
+
+Mesh Wing(Renderer& renderer, float side) {
+    ColoredMesh data;
+    const XMFLOAT4 feathers{.61f, .60f, .62f, 1.f};
+    const XMFLOAT4 tips{.17f, .16f, .20f, 1.f};
+    data.Face({{0.f, 0.f, -.115f}, {side * .43f, .035f, .065f},
+               {side * .55f, .04f, .22f}, {0.f, 0.f, .18f}}, feathers);
+    data.Face({{side * .43f, .035f, .065f}, {side * .88f, -.055f, -.10f},
+               {side * .55f, .04f, .22f}}, tips);
+    return data.Upload(renderer);
+}
 }
 
 Scene::Scene(Renderer& renderer) {
     m_sky = Sky(renderer);
     m_islands = Islands(renderer);
 
-    MeshData water;
-    water.Quad({{{-145.f, -.70f, -55.f}, {145.f, -.70f, -55.f},
-                 {145.f, -.70f, 124.f}, {-145.f, -.70f, 124.f}}}, true);
-    m_water = renderer.CreatePbrMesh(water.vertices, water.indices);
-    const auto waterNormals = WaterNormals(renderer);
-    m_waterMaterial = renderer.CreatePbrMaterial(nullptr, &waterNormals, nullptr);
-    m_waterMaterial.baseColorFactor = {.082f, .23f, .29f, 1.f};
-    m_waterMaterial.roughnessFactor = .19f;
-    m_waterMaterial.metallicFactor = 0.f;
+    m_water = SeaGrid(renderer);
+    m_waterMaterial = renderer.CreatePbrMaterial(nullptr, nullptr, nullptr);
+    m_waterMaterial.waterParams.x = 1.f;
+    m_resort = Resort(renderer);
+    m_boat = Boat(renderer);
+    m_leftWing = Wing(renderer, -1.f);
+    m_rightWing = Wing(renderer, 1.f);
 
     const auto stoneTexture = StoneTexture(renderer);
+    const auto stoneNormals = StoneNormals(renderer);
     for (const auto detail : {Detail::Simple, Detail::Detailed}) {
         const bool detailed = detail == Detail::Detailed;
         const auto data = Harbor(detailed);
         auto& buildings = detailed ? m_detailed : m_simple;
         buildings.geometry = renderer.CreatePbrMesh(data.vertices, data.indices);
-        buildings.material = renderer.CreatePbrMaterial(detailed ? &stoneTexture : nullptr, nullptr, nullptr);
-        buildings.material.baseColorFactor = detailed ? XMFLOAT4{.60f, .53f, .46f, 1.f}
-                                                      : XMFLOAT4{.47f, .40f, .33f, 1.f};
-        buildings.material.roughnessFactor = .69f;
+        buildings.material = renderer.CreatePbrMaterial(detailed ? &stoneTexture : nullptr,
+                                                        detailed ? &stoneNormals : nullptr, nullptr);
+        buildings.material.baseColorFactor = {.57f, .48f, .38f, 1.f};
+        buildings.material.normalScale = .72f;
+        buildings.material.roughnessFactor = detailed ? .57f : .69f;
         buildings.material.metallicFactor = 0.f;
         buildings.triangles = data.indices.size() / 3;
     }
 }
 
-void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail) const {
+void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float time) {
     const auto identity = XMMatrixIdentity();
     renderer.SetFog(false);
-    renderer.SetDirectionalLight({-kSun.x, -kSun.y, -kSun.z}, {1, .71f, .43f}, 1.55f,
-                                 {.33f, .36f, .49f});
+    renderer.SetDirectionalLight({-kSun.x, -kSun.y, -kSun.z}, {1, .77f, .56f}, 1.34f,
+                                 {.40f, .43f, .54f});
+    renderer.SetShadowExtent(23.f);
     renderer.BeginFrame(camera);
-    renderer.DrawMesh(m_sky, identity);
+    renderer.DrawMesh(m_sky, identity, true);
     renderer.DrawMesh(m_islands, identity);
+    m_waterMaterial.waterParams.y = time;
     renderer.DrawPbrMesh(m_water, m_waterMaterial, identity);
     const auto& buildings = detail == Detail::Detailed ? m_detailed : m_simple;
     renderer.DrawPbrMesh(buildings.geometry, buildings.material, identity);
+    renderer.DrawMesh(m_resort, identity);
+    const float sailAngle = time * .13f;
+    const auto boat = XMMatrixRotationZ(.12f * std::sin(1.7f * time)) * XMMatrixRotationY(sailAngle + .55f) *
+        XMMatrixTranslation(-10.1f + 4.7f * std::sin(sailAngle), -.55f + .14f * std::sin(time * 1.47f),
+                            7.1f + 3.8f * (1.f - std::cos(sailAngle)));
+    renderer.DrawMesh(m_boat, boat);
+    for (int bird = 0; bird < 4; ++bird) {
+        const float phase = time * .39f + bird * .27f;
+        const float flap = .50f * std::sin(time * (4.6f + bird * .25f) + bird * .91f);
+        const auto flight = XMMatrixRotationY(phase - kPi * .5f) *
+            XMMatrixTranslation(-5.f + 11.f * std::cos(phase), 4.9f + .52f * std::sin(phase * 2.f) + bird * .36f,
+                                18.f - 9.f * std::sin(phase));
+        renderer.DrawMesh(m_leftWing, XMMatrixRotationZ(flap) * flight);
+        renderer.DrawMesh(m_rightWing, XMMatrixRotationZ(-flap) * flight);
+    }
 }
 
 std::size_t Scene::TriangleCount(Detail detail) const {

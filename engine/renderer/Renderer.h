@@ -96,6 +96,7 @@ struct PbrMaterial {
     float normalScale     = 1.0f;
     bool  hasTextures     = false;
     bool  valid           = false;
+    DirectX::XMFLOAT4 waterParams{};
 };
 
 // VS/PS と共有する定数バッファのレイアウト。256B アライン必須。
@@ -117,7 +118,9 @@ struct alignas(256) SceneConstants {
     // ---- ステージL-02（PBR）で追加 ----
     DirectX::XMFLOAT4   baseColorFactor;  // rgba
     DirectX::XMFLOAT4   materialParams;   // x=metallic, y=roughness, z=法線強度, w=テクスチャ有無
+    DirectX::XMFLOAT4   waterParams;      // x=有効, y=経過秒
 };
+static_assert(sizeof(SceneConstants) == 512);
 
 // 描画のタグ（インターセプト時に「これは敵ドローか」を判別する印。ステージJ-01）。
 // 汎用 DrawMesh とは別に、敵は DrawEnemyTagged 経由で Enemy タグ付きで描く。

@@ -321,9 +321,10 @@ if (DXC_EXE)
             OUTPUT ${SHADER_BIN_DIR}/${OUT}
             COMMAND ${DXC_EXE} -E ${ENTRY} -T ${PROFILE}
                     ${_shader_strip}
-                    -Fo ${SHADER_BIN_DIR}/${OUT}
+                    -I ${CMAKE_SOURCE_DIR}/assets/shaders -Fo ${SHADER_BIN_DIR}/${OUT}
                     ${CMAKE_SOURCE_DIR}/assets/shaders/${SRC}
             DEPENDS ${CMAKE_SOURCE_DIR}/assets/shaders/${SRC}
+                    ${ARGN}
             COMMENT "dxc compiling ${SRC} -> ${OUT}"
             VERBATIM)
     endfunction()
@@ -338,8 +339,8 @@ if (DXC_EXE)
     # ステージL-03b: シャドウパス用（深度専用なので VS のみ。PS は無い）
     compile_shader(ShadowVS.hlsl VSMain vs_6_0 ShadowVS.dxil)
     # ステージL-02: PBR（Cook-Torrance + 法線マップ）
-    compile_shader(PbrVS.hlsl VSMain vs_6_0 PbrVS.dxil)
-    compile_shader(PbrPS.hlsl PSMain ps_6_0 PbrPS.dxil)
+    compile_shader(PbrVS.hlsl VSMain vs_6_0 PbrVS.dxil "${CMAKE_SOURCE_DIR}/assets/shaders/SunsetWaves.hlsli")
+    compile_shader(PbrPS.hlsl PSMain ps_6_0 PbrPS.dxil "${CMAKE_SOURCE_DIR}/assets/shaders/SunsetWaves.hlsli")
     # ステージL-04b: GPU スキニング
     compile_shader(PbrSkinnedVS.hlsl VSMain vs_6_0 PbrSkinnedVS.dxil)
     compile_shader(ShadowSkinnedVS.hlsl VSMain vs_6_0 ShadowSkinnedVS.dxil)

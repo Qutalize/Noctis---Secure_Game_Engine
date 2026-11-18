@@ -2149,6 +2149,7 @@ void Renderer::RenderShadowPass() {
         if (rec.material == MaterialType::Overlay) continue;
         if (rec.depth    == DepthMode::Disabled)   continue;
         if (rec.mesh == nullptr) continue;
+        if (rec.pbr && rec.pbr->waterParams.x > .5f) continue;
 
         const bool isSkinned = (rec.material == MaterialType::PbrSkinned);
         if (isSkinned && (!m_shadowSkinnedPSO || rec.skinPaletteAddr == 0)) {
@@ -2310,7 +2311,7 @@ void Renderer::EmitDraw(const DrawRecord& rec) {
 void Renderer::WriteCbAndDraw(const Mesh& mesh, const XMMATRIX& world,
                               const Texture* texture, const PbrMaterial* pbr) {
     // 定数バッファへ書き込み（HLSL は column-major なので転置してアップロード）
-    SceneConstants cb;
+    SceneConstants cb{};
     XMStoreFloat4x4(&cb.view,  XMMatrixTranspose(m_viewMatrix));
     XMStoreFloat4x4(&cb.proj,  XMMatrixTranspose(m_projMatrix));
     XMStoreFloat4x4(&cb.world, XMMatrixTranspose(world));
@@ -2347,6 +2348,7 @@ void Renderer::WriteCbAndDraw(const Mesh& mesh, const XMMATRIX& world,
         cb.materialParams  = XMFLOAT4{ pbr->metallicFactor, pbr->roughnessFactor,
                                        pbr->normalScale,
                                        pbr->hasTextures ? 1.0f : 0.0f };
+        cb.waterParams = pbr->waterParams;
     } else {
         cb.baseColorFactor = XMFLOAT4{ 1.0f, 1.0f, 1.0f, 1.0f };
         cb.materialParams  = XMFLOAT4{ 0.0f, 1.0f, 1.0f, 0.0f };
