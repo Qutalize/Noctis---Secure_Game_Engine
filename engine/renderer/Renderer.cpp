@@ -2363,6 +2363,7 @@ void Renderer::WriteCbAndDraw(const Mesh& mesh, const XMMATRIX& world,
     cb.rearLight = m_rearLight;
     cb.coastalHaze = m_coastalHaze;
     cb.scenicWeather = m_scenicWeather;
+    cb.scenicWake = m_scenicWake;
     // cameraPos.w にフォグ有効フラグ（1=フォグ / 0=フォグ無し）を載せる（PS が距離減衰に使う）。
     cb.cameraPos  = XMFLOAT4{ m_cameraPos.x, m_cameraPos.y, m_cameraPos.z,
                               m_fogEnabled ? 1.0f : 0.0f };

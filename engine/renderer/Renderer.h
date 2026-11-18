@@ -125,6 +125,7 @@ struct alignas(256) SceneConstants {
     DirectX::XMFLOAT4   rearLight;
     DirectX::XMFLOAT4   coastalHaze;
     DirectX::XMFLOAT4   scenicWeather;   // x=雨の強さ, y=経過秒, z=雨粒の画面スケール
+    DirectX::XMFLOAT4   scenicWake;      // xy=船尾のワールドXZ, z=船首の向き, w=航跡の強さ
 };
 static_assert(sizeof(SceneConstants) == 512);
 
@@ -378,6 +379,7 @@ public:
         const float pixelScale = m_height > 0 ? 540.f / static_cast<float>(m_height) : 1.f;
         m_scenicWeather = {strength, time, pixelScale, 0.f};
     }
+    void SetScenicWake(const DirectX::XMFLOAT4& wake) { m_scenicWake = wake; }
 
     // 画面の横/縦比（2D オーバーレイのアスペクト補正に使う）。
     float GetAspect() const {
@@ -706,6 +708,7 @@ private:
     DirectX::XMFLOAT4 m_rearLight{};
     DirectX::XMFLOAT4 m_coastalHaze{};
     DirectX::XMFLOAT4 m_scenicWeather{};
+    DirectX::XMFLOAT4 m_scenicWake{};
     DirectX::XMFLOAT3 m_cameraPos{ 0.0f, 0.0f, 0.0f };          // BeginFrame で更新
 
     bool m_initialized = false;

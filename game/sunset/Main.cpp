@@ -115,17 +115,8 @@ struct CameraKey {
     XMFLOAT3 target;
 };
 
-Camera PvCamera(float time) {
-    static constexpr std::array track{
-        CameraKey{0.f, {-14.f, 13.2f, -26.f}, {-2.1f, .5f, 25.f}},
-        CameraKey{3.3f, {-7.f, 8.5f, -19.f}, {-.8f, .1f, 12.f}},
-        CameraKey{6.4f, {1.8f, 3.4f, -10.4f}, {-2.8f, .12f, -1.6f}},
-        CameraKey{9.4f, {3.22f, 1.75f, -3.1f}, {6.85f, 1.25f, 4.6f}},
-        CameraKey{12.f, {3.21f, 1.77f, 3.3f}, {7.55f, 1.45f, 5.7f}},
-        CameraKey{14.7f, {3.18f, 2.15f, 12.2f}, {.4f, 2.2f, 23.8f}},
-        CameraKey{17.0f, {1.35f, 1.78f, 18.1f}, {-2.9f, 1.43f, 25.1f}},
-        CameraKey{20.f, {-.69f, 1.69f, 24.2f}, {3.30f, 1.63f, 27.7f}},
-    };
+template <std::size_t Count>
+Camera CameraOnTrack(const std::array<CameraKey, Count>& track, float time, bool startAtRest = false) {
     const auto next = std::upper_bound(track.begin(), track.end() - 1, time,
         [](float value, const CameraKey& key) { return value < key.time; });
     const auto index = static_cast<std::size_t>(std::max<std::ptrdiff_t>(1, next - track.begin()) - 1);
@@ -137,7 +128,8 @@ Camera PvCamera(float time) {
         const auto point = [&](std::size_t key) { return XMLoadFloat3(&(track[key].*field)); };
         const auto before = index > 0 ? index - 1 : index;
         const auto after = std::min(index + 2, track.size() - 1);
-        const auto tangentStart = (point(index + 1) - point(before)) * (duration / (end.time - track[before].time));
+        const auto tangentStart = startAtRest && index == 0
+            ? XMVectorZero() : (point(index + 1) - point(before)) * (duration / (end.time - track[before].time));
         const auto tangentEnd = (point(after) - point(index)) * (duration / (track[after].time - start.time));
         XMFLOAT3 value;
         XMStoreFloat3(&value, XMVectorHermite(point(index), tangentStart, point(index + 1), tangentEnd, amount));
@@ -145,6 +137,53 @@ Camera PvCamera(float time) {
     };
     return LookAt(sample(&CameraKey::eye), sample(&CameraKey::target));
 }
+
+Camera PvCamera(float time) {
+    static constexpr std::array track{
+        CameraKey{0.f, {-14.f, 13.2f, -26.f}, {-2.1f, .5f, 25.f}},
+        CameraKey{3.3f, {-7.f, 8.5f, -19.f}, {-.8f, .1f, 12.f}},
+        CameraKey{6.4f, {1.8f, 3.4f, -10.4f}, {-2.8f, .12f, -1.6f}},
+        CameraKey{9.4f, {3.22f, 1.75f, -3.1f}, {6.85f, 1.25f, 4.6f}},
+        CameraKey{12.f, {3.21f, 1.77f, 3.3f}, {7.55f, 1.45f, 5.7f}},
+        CameraKey{14.7f, {3.18f, 2.15f, 12.2f}, {.4f, 2.2f, 23.8f}},
+        CameraKey{17.0f, {1.35f, 1.78f, 18.1f}, {-2.9f, 1.43f, 25.1f}},
+        CameraKey{20.f, {-.69f, 1.69f, 24.2f}, {3.30f, 1.63f, 27.7f}},
+    };
+    return CameraOnTrack(track, time);
+}
+
+#ifndef SUNSET_BASELINE
+constexpr int kVoyageSeconds = 26;
+constexpr float kHoldUntil = 5.f;
+constexpr float kDeparture = 14.f;
+
+Camera VoyageCamera(float time) {
+    static constexpr std::array track{
+        CameraKey{kHoldUntil, {-14.f, 13.2f, -26.f}, {-2.1f, .5f, 25.f}},
+        CameraKey{8.7f, {-6.45f, 6.1f, -14.1f}, {-4.1f, .55f, 5.7f}},
+        CameraKey{10.8f, {-3.5f, 2.7f, -4.65f}, {-14.8f, .55f, -2.15f}},
+        CameraKey{12.5f, {-8.3f, 1.94f, -2.67f}, {-16.1f, .8f, -2.37f}},
+        CameraKey{14.7f, {-13.2f, 2.44f, -4.4f}, {-16.8f, 1.65f, -.3f}},
+        CameraKey{17.8f, {-17.8f, 3.3f, -.8f}, {-18.5f, 1.4f, 9.5f}},
+        CameraKey{21.5f, {-24.8f, 5.6f, 15.75f}, {-22.4f, 1.18f, 34.f}},
+        CameraKey{24.2f, {-29.25f, 8.8f, 41.65f}, {-25.3f, 1.2f, 62.85f}},
+        CameraKey{26.f, {-33.6f, 13.2f, 60.7f}, {-29.6f, 3.1f, 94.3f}},
+    };
+    if (time <= kHoldUntil) return LookAt(track.front().eye, track.front().target);
+    return CameraOnTrack(track, time, true);
+}
+
+sunset::VoyagePose BoatOnVoyage(float time) {
+    const float travel = std::max(0.f, time - kDeparture);
+    return {{-16.1f - .36f * travel - .037f * travel * travel,
+            -2.4f + .35f * travel + .55f * travel * travel},
+            std::atan2(-.36f - .074f * travel, .35f + 1.1f * travel), Ease(travel / 3.1f)};
+}
+
+float VoyageDaylight(float time) {
+    return .025f + .82f * Ease(time / kHoldUntil) + .14f * Ease((time - kHoldUntil) / 8.f);
+}
+#endif
 
 float PvDaylight(float time) {
     return Ease(time / kPvSeconds);
@@ -326,6 +365,38 @@ int RenderPv(const fs::path& directory) {
     return 0;
 }
 
+#ifndef SUNSET_BASELINE
+int RenderVoyage(const fs::path& directory) {
+    if (!fs::create_directory(directory)) throw std::runtime_error("Voyage frame directory must be new");
+    Renderer renderer;
+    if (InitializeCoastalView(renderer, nullptr, kWidth, kHeight, true) != 4 ||
+        !renderer.IsPbrAvailable() || !renderer.IsShadowEnabled()) {
+        throw std::runtime_error("The voyage capture requires PBR, shadows and 4x MSAA");
+    }
+    sunset::Scene scene(renderer);
+    std::ofstream trace(directory / "voyage.csv");
+    trace << "frame,eye_x,eye_y,eye_z,yaw,pitch,daylight,boat_x,boat_z,wake\n";
+    for (int frame = 0; frame < kPvFps * kVoyageSeconds; ++frame) {
+        const float time = static_cast<float>(frame) / kPvFps;
+        const auto camera = VoyageCamera(time);
+        const auto pose = BoatOnVoyage(time);
+        const auto& eye = camera.GetPosition();
+        const float daylight = VoyageDaylight(time);
+        trace << frame << ',' << eye.x << ',' << eye.y << ',' << eye.z << ',' << camera.GetYaw() << ','
+              << camera.GetPitch() << ',' << daylight << ',' << pose.position.x << ',' << pose.position.y
+              << ',' << pose.wake << '\n';
+        scene.Draw(renderer, camera, sunset::Detail::Detailed, time, daylight, &pose);
+        renderer.EndFrame();
+        char name[24]{};
+        std::snprintf(name, sizeof(name), "frame-%04d.ppm", frame);
+        SavePpm(directory / name, renderer.ReadOffscreenRgba());
+    }
+    if (!trace) throw std::runtime_error("Could not write voyage trace");
+    renderer.Shutdown();
+    return 0;
+}
+#endif
+
 void SetTitle(HWND window, sunset::Detail detail, UINT samples) {
     const wchar_t* name = detail == sunset::Detail::Detailed ? L"Detailed" : L"Simple";
     const std::wstring title = std::wstring(L"Noctis | Sunset Harbor | ") + name +
@@ -409,7 +480,10 @@ int wmain(int argc, wchar_t** argv) {
         if (argc == 3 && operation == L"--compare-aa") return CaptureRevision(argv[2], kPvSupersample);
         if (argc == 3 && operation == L"--compare-msaa") return CaptureRevision(argv[2], 1, true);
         if (argc == 3 && operation == L"--pv-frames") return RenderPv(argv[2]);
-        throw std::runtime_error("Usage: SunsetWalk.exe [--self-test | --capture | --compare | --compare-aa | --compare-msaa | --pv-frames]");
+#ifndef SUNSET_BASELINE
+        if (argc == 3 && operation == L"--voyage-frames") return RenderVoyage(argv[2]);
+#endif
+        throw std::runtime_error("Unknown SunsetWalk operation or missing output directory");
     } catch (const std::exception& error) {
         std::fprintf(stderr, "SunsetWalk: %s\n", error.what());
         return 1;

@@ -185,6 +185,72 @@ jobs:
           if-no-files-found: error
           retention-days: 5
 
+  journey-coast:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build the coastal voyage capture
+        run: |
+          cmake -S . -B voyage-ci -G "Visual Studio 18 2026" -A x64 -DGAME_PROFILE=all -DBUILD_SUNSET_WALK=ON
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build voyage-ci --config Release --target sunset_walk --parallel 2
+      - name: Prepare coastal assets and capture the voyage
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          python -B tools/sunset/prepare_assets.py voyage-ci/Release/coastal-assets
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & voyage-ci/Release/SunsetWalk.exe --voyage-frames voyage-frames
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B tools/sunset/build_journey.py coast voyage-frames voyage-evidence
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item voyage-frames/voyage.csv voyage-evidence/voyage.csv
+      - uses: actions/upload-artifact@v7
+        with:
+          name: voyage-cut
+          path: voyage-evidence/*
+          if-no-files-found: error
+          retention-days: 2
+
+  journey:
+    needs: [desert-road, inland-tour, journey-coast]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
+        with:
+          name: desert-preview
+          path: clips/desert
+      - uses: actions/download-artifact@v8
+        with:
+          name: inland-preview
+          path: clips/inland
+      - uses: actions/download-artifact@v8
+        with:
+          name: voyage-cut
+          path: clips/coast
+      - name: Assemble and decode the full film
+        run: |
+          if ! command -v ffmpeg || ! command -v ffprobe; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          python3 -B tools/sunset/build_journey.py assemble clips/desert/Desert-Road-PV.mp4 clips/inland/Inland-Tour-PV.mp4 clips/coast/voyage.mp4 journey-output
+          cp clips/coast/*.png clips/coast/coastal-voyage.json clips/coast/voyage.csv journey-output/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: journey-preview
+          path: |
+            journey-output/*.mp4
+            journey-output/*.png
+            journey-output/*.json
+            journey-output/*.csv
+          if-no-files-found: error
+          retention-days: 5
+
   open-security:
     runs-on: windows-2025
     timeout-minutes: 20

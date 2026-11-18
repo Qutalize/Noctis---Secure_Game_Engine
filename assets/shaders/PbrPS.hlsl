@@ -36,6 +36,7 @@ cbuffer SceneConstants : register(b0)
     float4 gRearLight;
     float4 gCoastalHaze;
     float4 gScenicWeather;
+    float4 gScenicWake;
 };
 
 #include "SunsetWaves.hlsli"
@@ -194,7 +195,21 @@ float4 PSMain(PSInput input) : SV_Target
         const float3 sea = lerp(tint, sky, fresnel) +
             shadow * glint * lerp(float3(.83f, .91f, 1.f), float3(1.f, .64f, .35f), sunset);
         const float3 foam = float3(.82f, .90f, .85f) * lerp(1.0f, .40f, dusk);
-        const float3 color = lerp(sea, foam, wash * .72f);
+        float wake = 0.f;
+        if (gScenicWake.w > 0.f) {
+            float2 heading = float2(sin(gScenicWake.z), cos(gScenicWake.z));
+            float2 offset = seaPosition - gScenicWake.xy;
+            float behind = -dot(offset, heading);
+            float across = abs(dot(offset, float2(heading.y, -heading.x)));
+            float distance = max(0.f, behind);
+            float plume = .56f + .26f * distance;
+            float edge = 1.f - smoothstep(.12f, .62f + distance * .018f, abs(across - plume));
+            float center = 1.f - smoothstep(.10f, .6f + distance * .026f, across);
+            float gaps = CoastalNoise(seaPosition * 1.62f + heading * time * .63f);
+            wake = saturate(edge * .85f + center * .42f) * smoothstep(0.f, .48f, behind) *
+                (1.f - smoothstep(8.f, 31.f, behind)) * smoothstep(.22f, .64f, gaps) * gScenicWake.w;
+        }
+        const float3 color = lerp(lerp(sea, foam, wash * .72f), foam * 1.23f, wake);
         return float4(saturate(lerp(color, sky, .38f * horizon)), 1.0f);
     }
     const bool hasTextures = (gMaterialParams.w > 0.5f);

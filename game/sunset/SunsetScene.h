@@ -7,10 +7,17 @@
 namespace sunset {
 enum class Detail { Simple, Detailed };
 
+struct VoyagePose {
+    DirectX::XMFLOAT2 position;
+    float heading;
+    float wake;
+};
+
 class Scene {
 public:
     explicit Scene(Renderer& renderer);
-    void Draw(Renderer& renderer, const Camera& camera, Detail detail, float time, float daylight);
+    void Draw(Renderer& renderer, const Camera& camera, Detail detail, float time, float daylight,
+              const VoyagePose* voyage = nullptr);
     std::size_t TriangleCount(Detail detail) const;
 
 private:

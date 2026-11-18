@@ -622,7 +622,8 @@ Scene::Scene(Renderer& renderer) {
     }
 }
 
-void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float time, float daylight) {
+void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float time, float daylight,
+                 const VoyagePose* voyage) {
     const auto identity = XMMatrixIdentity();
     const float sunset = std::clamp(daylight * 1.68f, 0.f, 1.f);
     const float twilight = std::clamp((daylight - .61f) / .39f, 0.f, 1.f);
@@ -642,6 +643,13 @@ void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float 
     renderer.SetWarmAccentLights({3.46f, 2.98f, 24.8f, 1.44f * dusk},
                                  {.3f, 2.78f, 27.0f, 1.19f * dusk});
     renderer.SetShadowExtent(42.f);
+    DirectX::XMFLOAT4 wake{};
+    if (voyage) {
+        constexpr float sternOffset = 1.62f;
+        wake = {voyage->position.x - sternOffset * std::sin(voyage->heading),
+                voyage->position.y - sternOffset * std::cos(voyage->heading), voyage->heading, voyage->wake};
+    }
+    renderer.SetScenicWake(wake);
     renderer.BeginFrame(camera, 70.f, 1200.f);
     m_skyMaterial.coastalParams = {2.f, time, sunset, dusk};
     const auto& eye = camera.GetPosition();
@@ -685,11 +693,18 @@ void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float 
     m_guest.Draw(renderer, camera, {-19.2f, .01f, -11.15f}, 1.22f);
     m_diners.Draw(renderer, camera, {1.52f, .06f, 25.15f}, -.75f);
     m_diners.Draw(renderer, camera, {14.2f, .01f, -11.38f}, .63f);
-    const float sailAngle = time * .13f;
-    const auto boat = XMMatrixRotationZ(.12f * std::sin(1.7f * time)) * XMMatrixRotationY(sailAngle + .55f) *
-        XMMatrixTranslation(-10.1f + 4.7f * std::sin(sailAngle), -.55f + .14f * std::sin(time * 1.47f),
-                            7.1f + 3.8f * (1.f - std::cos(sailAngle)));
-    renderer.DrawMesh(m_boat, boat);
+    if (voyage) {
+        const auto boat = XMMatrixScaling(1.48f, 1.48f, 1.48f) *
+            XMMatrixRotationZ(.065f * std::sin(1.7f * time)) * XMMatrixRotationY(voyage->heading) *
+            XMMatrixTranslation(voyage->position.x, -.53f + .066f * std::sin(time * 1.47f), voyage->position.y);
+        renderer.DrawMesh(m_boat, boat);
+    } else {
+        const float sailAngle = time * .13f;
+        const auto boat = XMMatrixRotationZ(.12f * std::sin(1.7f * time)) * XMMatrixRotationY(sailAngle + .55f) *
+            XMMatrixTranslation(-10.1f + 4.7f * std::sin(sailAngle), -.55f + .14f * std::sin(time * 1.47f),
+                                7.1f + 3.8f * (1.f - std::cos(sailAngle)));
+        renderer.DrawMesh(m_boat, boat);
+    }
     for (int bird = 0; bird < 4; ++bird) {
         const float phase = time * .39f + bird * .27f;
         const float flap = .50f * std::sin(time * (4.6f + bird * .25f) + bird * .91f);
