@@ -405,12 +405,12 @@ Mesh Foreshore(Renderer& renderer) {
         const float backLeft = 3.4f + 2.4f * CloudNoise(left * .24f, 1.7f);
         const float backRight = 3.4f + 2.4f * CloudNoise(right * .24f, 1.7f);
         for (int band = 0; band < 6; ++band) {
-            const float near = std::lerp(-.78f, backLeft, band / 6.f);
-            const float far = std::lerp(-.78f, backLeft, (band + 1) / 6.f);
+            const float seaward = std::lerp(-.78f, backLeft, band / 6.f);
+            const float inland = std::lerp(-.78f, backLeft, (band + 1) / 6.f);
             const float nearRight = std::lerp(-.78f, backRight, band / 6.f);
             const float farRight = std::lerp(-.78f, backRight, (band + 1) / 6.f);
-            mesh.Quad({{BeachVertex(left, far), BeachVertex(right, farRight),
-                        BeachVertex(right, nearRight), BeachVertex(left, near)}});
+            mesh.Quad({{BeachVertex(left, inland), BeachVertex(right, farRight),
+                        BeachVertex(right, nearRight), BeachVertex(left, seaward)}});
         }
     }
     for (auto& vertex : mesh.vertices) {
