@@ -368,17 +368,18 @@ void Palm(ColoredMesh& mesh, float x, float y, float z, float size, float seed) 
     }
 }
 
+XMFLOAT3 BeachVertex(float x, float distance) {
+    const float hills = std::clamp((distance - 3.5f) * .28f, 0.f, 1.f);
+    const float side = std::clamp(std::abs(x) * .12f, 0.f, 1.f);
+    const float height = -.64f + std::min(distance, 5.f) * .13f +
+        hills * side * (CloudNoise(x * .17f, distance * .24f) + .6f) * 1.3f;
+    return {x, height, Shoreline(x) - distance};
+}
+
 Mesh Shore(Renderer& renderer) {
     ColoredMesh mesh;
     for (int segment = -55; segment < 55; ++segment) {
         for (int band = 0; band < 18; ++band) {
-            const auto vertex = [](float x, float distance) {
-                const float hills = std::clamp((distance - 3.5f) * .28f, 0.f, 1.f);
-                const float side = std::clamp(std::abs(x) * .12f, 0.f, 1.f);
-                const float height = -.64f + std::min(distance, 5.f) * .13f +
-                    hills * side * (CloudNoise(x * .17f, distance * .24f) + .6f) * 1.3f;
-                return XMFLOAT3{x, height, Shoreline(x) - distance};
-            };
             const float distance = -.72f + band * 1.35f;
             const float texture = CloudNoise(segment * .59f, band * .83f);
             const float greens = (std::clamp((distance - 3.f) * .22f + .35f * texture, 0.f, 1.f)) *
@@ -387,27 +388,39 @@ Mesh Shore(Renderer& renderer) {
             const XMFLOAT4 color{Mix(Mix(.45f, .82f, wet), .27f + .13f * texture, greens),
                                  Mix(Mix(.37f, .72f, wet), .36f + .16f * texture, greens),
                                  Mix(Mix(.28f, .52f, wet), .18f + .05f * texture, greens), 1.f};
-            mesh.Face({vertex(static_cast<float>(segment), distance + 1.35f),
-                       vertex(segment + 1.f, distance + 1.35f), vertex(segment + 1.f, distance),
-                       vertex(static_cast<float>(segment), distance)}, color);
+            mesh.Face({BeachVertex(static_cast<float>(segment), distance + 1.35f),
+                       BeachVertex(segment + 1.f, distance + 1.35f), BeachVertex(segment + 1.f, distance),
+                       BeachVertex(static_cast<float>(segment), distance)}, color);
         }
     }
     for (int tree = 0; tree < 16; ++tree) {
         const float x = (tree < 8 ? -1.f : 1.f) * (4.55f + (tree % 8) * 2.06f);
         const float inland = 3.9f + 5.2f * CloudNoise(tree * .82f, 1.36f);
-        Palm(mesh, x, inland > 5.f ? .76f : .20f, Shoreline(x) - inland,
+        const auto base = BeachVertex(x, inland);
+        Palm(mesh, base.x, base.y - .13f, base.z,
              .72f + .45f * CloudNoise(tree * 1.33f, 3.1f), tree * 1.62f);
     }
-    for (int rock = 0; rock < 32; ++rock) {
-        const float x = -27.f + rock * .64f;
-        const float z = Shoreline(x) - .1f + CloudNoise(x * .35f, 6.2f) * 1.35f;
-        const float radius = .38f + .91f * CloudNoise(x, 6.4f);
+    for (int rock = 0; rock < 21; ++rock) {
+        const float seed = rock * 1.71f;
+        const float x = -31.f + 25.f * CloudNoise(seed, 5.26f);
+        const float inland = -.38f + CloudNoise(1.9f, seed) * 3.4f;
+        const auto base = BeachVertex(x, inland);
+        const float radius = .19f + 1.36f * std::pow(CloudNoise(seed, 6.4f), 1.7f);
+        const auto ring = [&](int index, bool top) {
+            const int side = index % 7;
+            const float angle = kPi * 2.f * side / 7.f + seed;
+            const float width = radius * (.64f + .51f * CloudNoise(seed, side * 1.7f));
+            const float scale = top ? .56f : 1.f;
+            return XMFLOAT3{base.x + scale * width * std::cos(angle) + (top ? .16f * radius : 0.f),
+                            base.y + (top ? (.36f + .19f * CloudNoise(side, seed)) * radius : -.16f),
+                            base.z + scale * width * .82f * std::sin(angle)};
+        };
         for (int side = 0; side < 7; ++side) {
-            const float first = kPi * 2.f * side / 7.f, second = kPi * 2.f * (side + 1) / 7.f;
-            mesh.Face({{x + .22f * radius, -.17f + radius * .54f, z + .15f * radius},
-                       {x + radius * std::cos(first), -.65f, z + radius * std::sin(first)},
-                       {x + radius * std::cos(second), -.65f, z + radius * std::sin(second)}},
-                       {.44f, .42f, .38f, 1});
+            const float shade = .34f + .18f * CloudNoise(seed, side);
+            const XMFLOAT4 color{shade, shade * .95f, shade * .87f, 1.f};
+            mesh.Face({ring(side, false), ring(side + 1, false), ring(side + 1, true), ring(side, true)}, color);
+            mesh.Face({{base.x + radius * .15f, base.y + radius * .54f, base.z},
+                       ring(side + 1, true), ring(side, true)}, color);
         }
     }
     return mesh.Upload(renderer);
@@ -498,15 +511,16 @@ Mesh Restaurant(Renderer& renderer) {
     }
     for (int panel = 0; panel < 24; ++panel) {
         const float x = -6.56f + panel * .55f;
-        const float next = x + .55f;
+        const float next = -6.56f + (panel + 1) * .55f;
         const float eave = 3.13f + .025f * std::abs(x);
+        const float nextEave = 3.13f + .025f * std::abs(next);
         const float ridge = 5.05f + .033f * x;
         const float nextRidge = 5.05f + .033f * next;
         const float tier = panel % 2 ? 1.f : .91f;
         const XMFLOAT4 roof{canvas.x * tier, canvas.y * tier, canvas.z * tier, 1.f};
-        mesh.Face({{x,eave,18.3f},{next,eave,18.3f},{next,nextRidge,24.4f},{x,ridge,24.4f}}, roof);
-        mesh.Face({{x,ridge,24.4f},{next,nextRidge,24.4f},{next,eave,30.0f},{x,eave,30.0f}}, roof);
-        mesh.Face({{x,ridge - .07f,24.4f},{next,nextRidge - .07f,24.4f},{next,eave - .08f,18.3f},{x,eave - .08f,18.3f}}, beam);
+        mesh.Face({{x,eave,18.3f},{next,nextEave,18.3f},{next,nextRidge,24.4f},{x,ridge,24.4f}}, roof);
+        mesh.Face({{x,ridge,24.4f},{next,nextRidge,24.4f},{next,nextEave,30.0f},{x,eave,30.0f}}, roof);
+        mesh.Face({{x,ridge - .07f,24.4f},{next,nextRidge - .07f,24.4f},{next,nextEave - .08f,18.3f},{x,eave - .08f,18.3f}}, beam);
     }
     for (const float side : {-1.f, 1.f}) {
         for (const float z : {21.5f, 24.5f, 27.5f}) {
@@ -685,7 +699,7 @@ void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float 
                                  {1.f, Mix(.93f, .64f, sunset), Mix(.86f, .36f, sunset)},
                                  Mix(1.07f, .03f, dusk),
                                  {Mix(.64f, .129f, dusk), Mix(.69f, .17f, dusk), Mix(.75f, .28f, dusk)});
-    renderer.SetWarmFillLight({.2f, 3.08f, 24.1f}, .74f * dusk);
+    renderer.SetWarmFillLight({.2f, 3.08f, 24.1f}, 2.2f * dusk);
     renderer.SetShadowExtent(42.f);
     renderer.BeginFrame(camera);
     m_skyMaterial.coastalParams = {2.f, time, sunset, dusk};
