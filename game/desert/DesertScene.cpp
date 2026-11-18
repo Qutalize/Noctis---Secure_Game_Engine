@@ -83,7 +83,7 @@ XMFLOAT2 Route::Step(XMFLOAT2 position,XMFLOAT2 delta) const {
 Scene::Scene(Renderer& renderer,const std::filesystem::path& assets) : m_route(assets/"route.json") {
     const auto load=[&](GltfProp& prop,const char* name) {
         const auto file=(assets/name/(std::string(name)+"_1k.gltf")).u8string();
-        if (!prop.Load(renderer,std::string(file.begin(),file.end()),true)) {
+        if (!prop.Load(renderer,std::string(file.begin(),file.end()),true,true)) {
             throw std::runtime_error(std::string("Missing desert asset: ")+name);
         }
     };
@@ -100,12 +100,12 @@ void Scene::Draw(Renderer& renderer,const Camera& camera,float time,float evenin
     const float azimuth=std::lerp(.52f,.43f,evening);
     const XMFLOAT3 sun{std::sin(azimuth)*std::cos(elevation),std::sin(elevation),std::cos(azimuth)*std::cos(elevation)};
     renderer.SetFog(false);
-    renderer.SetCoastalHaze({.66f,.53f,.42f},.0023f);
-    renderer.SetDirectionalLight({-sun.x,-sun.y,-sun.z},{1.f,.77f,.53f},1.52f,{.48f,.46f,.47f});
+    renderer.SetCoastalHaze({.64f,.55f,.47f},.00145f);
+    renderer.SetDirectionalLight({-sun.x,-sun.y,-sun.z},{1.f,.74f,.46f},1.55f,{.61f,.56f,.50f});
     renderer.SetShadowExtent(86.f);
     renderer.BeginFrame(camera,verticalFov);
     const auto& eye=camera.GetPosition();
-    m_skyMaterial.coastalParams={2.f,time,std::lerp(.16f,.56f,evening),0.f};
+    m_skyMaterial.coastalParams={2.f,time,std::lerp(.18f,.69f,evening),0.f};
     renderer.DrawPbrMesh(m_sky,m_skyMaterial,XMMatrixTranslation(eye.x,eye.y,eye.z),true);
     const auto identity=XMMatrixIdentity();
     m_ground.Draw(renderer,identity);
@@ -116,7 +116,7 @@ void Scene::Draw(Renderer& renderer,const Camera& camera,float time,float evenin
              std::array{-20.4f,144.f,1.65f,-.22f},std::array{13.6f,181.f,2.1f,.43f}}) {
         const auto [x,z,scale,rotation]=placement;
         m_rock.Draw(renderer,XMMatrixScaling(scale,scale,scale)*XMMatrixRotationY(rotation)*
-                             XMMatrixTranslation(x,m_route.At(z).y-.9f,z));
+                             XMMatrixTranslation(x,m_route.At(z).y-1.42f,z));
     }
 }
 }

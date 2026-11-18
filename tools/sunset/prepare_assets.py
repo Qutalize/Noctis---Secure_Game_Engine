@@ -16,7 +16,10 @@ def prepare(output, desert=False):
 
     coastal = manifest("coastal-assets.json")
     if desert:
-        inventory = {"rock_face_01": coastal["rock_face_01"], **manifest("desert-materials.json")}
+        architecture = manifest("architecture-materials.json")
+        inventory = {"rock_face_01": coastal["rock_face_01"],
+                     "large_sandstone_blocks_01": architecture["large_sandstone_blocks_01"],
+                     **manifest("desert-materials.json")}
     else:
         inventory = {**coastal, **manifest("architecture-materials.json")}
     for model, files in inventory.items():
@@ -30,9 +33,12 @@ def prepare(output, desert=False):
             target = directory / name
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.suffix == ".jpg":
+                filters = ["-vf", "scale=512:512:flags=lanczos"] if desert and model in ("terrain_red_01", "worn_asphalt") else []
+                if desert and model == "terrain_red_01" and name == "diff.jpg":
+                    filters = ["-vf", "scale=512:512:flags=lanczos,eq=gamma=1.28:contrast=0.83"]
                 subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-f", "image2pipe",
                                 "-c:v", "mjpeg", "-i", "pipe:0", "-frames:v", "1",
-                                "-pix_fmt", "rgb24", str(target.with_suffix(".png"))],
+                                *filters, "-pix_fmt", "rgb24", str(target.with_suffix(".png"))],
                                input=original, check=True)
             elif target.suffix == ".gltf":
                 gltf = json.loads(original)

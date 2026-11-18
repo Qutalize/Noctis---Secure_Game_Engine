@@ -9,14 +9,15 @@ from build_architecture import Model
 
 SOIL = "terrain_red_01"
 ASPHALT = "worn_asphalt"
-COLORS = {SOIL: (1.05, .88, .71, 1.), ASPHALT: (.76, .72, .67, 1.),
+COLORS = {SOIL: (1., .90, .74, 1.), ASPHALT: (.65, .70, .74, 1.),
           "sky": (1., 1., 1., 1.), "yellow": (.91, .61, .117, 1.),
           "line": (.76, .75, .69, 1.), "rock": (.51, .27, .13, 1.),
-          "red": (.66, .31, .155, 1.), "ochre": (.71, .45, .25, 1.),
-          "band": (.43, .22, .12, 1.), "stem": (.20, .13, .076, 1.),
+          "red": (1., .62, .37, 1.), "ochre": (1., .92, .67, 1.),
+          "band": (.71, .44, .28, 1.), "stem": (.20, .13, .076, 1.),
           "leaf": (.29, .30, .13, 1.), "metal": (.45, .42, .37, 1.),
           "timber": (.17, .103, .059, 1.)}
 VEGETATION_SEED = 48261
+MESA_COLORS = {**COLORS, "rock": (.91,.72,.52,1.)}
 
 
 def road_at(keys, distance):
@@ -55,11 +56,11 @@ def build_ground(keys):
         uv = [(offset/4.4,z/7.5) for offset,z in ((left,far),(right,far),(right,near),(left,near))]
         model.face(kind,points,uv)
 
-    for distance in range(-32,408,2):
+    for distance in range(-32,409,2):
         following=min(distance+2,409)
         for left,right in zip(offsets,offsets[1:]):
             edge = [land(left,following),land(right,following),land(right,distance),land(left,distance)]
-            model.face(SOIL,edge,[(x/5.6,z/5.6) for x,_,z in edge])
+            model.face(SOIL,edge,[(x/4.6,z/4.6) for x,_,z in edge])
         strip(ASPHALT,-4.12,4.12,distance,following)
         for side in (-1,1):
             stripe=side*3.88
@@ -76,7 +77,7 @@ def build_mesas(pieces, keys):
     levels=((0,1.13),(.11,1.0),(.31,.79),(.40,.74),(.46,.60),(.57,.61),
             (.64,.55),(.735,.54),(.79,.50),(.86,.49),(.94,.44),(1.,.42))
     bands=("ochre","rock","red","band","red","rock","band","red","ochre","red","rock")
-    sides=31
+    sides=47
     for x,z,width,depth,height,seed in pieces:
         base=ground_at(keys,x,z)-.92
         rings=[]
@@ -84,8 +85,8 @@ def build_mesas(pieces, keys):
             row=[]
             for corner in range(sides):
                 angle=math.tau*corner/sides
-                erosion=(1. + .125*math.sin(angle*5+seed) + .071*math.sin(angle*9-seed*3) +
-                         .069*math.sin(angle*3+index*.78+seed))
+                erosion=(1. + .125*math.sin(angle*5+seed) + .083*math.sin(angle*9-seed*3) +
+                         .079*math.sin(angle*3+index*.78+seed)+.042*math.sin(angle*17+index*.63+seed))
                 crest=.028*math.sin(angle*3+seed)+.011*math.sin(angle*8+seed*4)
                 row.append((x+math.cos(angle)*width*radius*erosion+elevation*math.sin(seed)*3.4,
                             base+height*(elevation+crest),
@@ -94,7 +95,9 @@ def build_mesas(pieces, keys):
         for index,(lower,upper) in enumerate(zip(rings,rings[1:])):
             for corner in range(sides):
                 next_corner=(corner+1)%sides
-                model.face(bands[index],[lower[corner],upper[corner],upper[next_corner],lower[next_corner]])
+                points=[lower[corner],upper[corner],upper[next_corner],lower[next_corner]]
+                model.face(bands[index],points,
+                           [(point[0]*.115+point[2]*.147,-point[1]*.157) for point in points])
         for corner in range(sides):
             model.face("ochre",[(x+math.sin(seed)*3.4,base+height*.985,z),
                                  rings[-1][(corner+1)%sides],rings[-1][corner]])
@@ -151,7 +154,8 @@ def build_desert(output):
     source = Path(__file__).resolve().parents[2]/"assets/models/desert/route.json"
     layout = json.loads(source.read_text(encoding="utf-8"))
     keys=layout["road"]
-    for name,model in (("road_corridor",build_ground(keys)),("sandstone_mesas",build_mesas(layout["mesas"],keys)),
-                       ("roadside",build_roadside(keys))):
-        model.write(output,name,COLORS,(SOIL,ASPHALT))
+    build_ground(keys).write(output,"road_corridor",COLORS,(SOIL,ASPHALT))
+    build_mesas(layout["mesas"],keys).write(output,"sandstone_mesas",MESA_COLORS,
+        {band:"large_sandstone_blocks_01" for band in ("ochre","rock","red","band")})
+    build_roadside(keys).write(output,"roadside",COLORS,())
     (output/"route.json").write_text(json.dumps({"road":keys}),encoding="utf-8")

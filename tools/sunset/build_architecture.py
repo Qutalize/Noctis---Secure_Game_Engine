@@ -82,8 +82,9 @@ class Model:
                 "baseColorFactor": colors[kind], "metallicFactor": 0., "roughnessFactor": .78}}
             if kind in textured:
                 start = len(paths)
+                texture_kind = textured.get(kind, kind) if isinstance(textured, dict) else kind
                 for channel in ("diff","nor_gl","arm"):
-                    paths.append({"uri": f"../{kind}/{channel}.png"})
+                    paths.append({"uri": f"../{texture_kind}/{channel}.png"})
                     textures.append({"source": len(paths)-1})
                 material["pbrMetallicRoughness"].update({"baseColorTexture": {"index": start},
                     "metallicRoughnessTexture": {"index": start+2}, "roughnessFactor": 1.})

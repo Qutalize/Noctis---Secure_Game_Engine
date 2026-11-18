@@ -54,7 +54,7 @@ Shot Compose(const desert::Route& route,float time) {
     }
     const float movement=(time-8.f)/4.f;
     return {LookAt(route.Point(109.f+movement*14.f,12.f-movement*5.7f,3.6f+movement*.84f),
-                   route.Point(178.f+movement*10.f,-2.6f,4.95f)),39.f,.77f};
+                   route.Point(178.f+movement*10.f,15.6f+movement*7.f,6.9f)),44.f,.88f};
 }
 
 void SelfTest(const desert::Route& route) {

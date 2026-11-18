@@ -177,6 +177,10 @@ float4 PSMain(PSInput input) : SV_Target
         return float4(saturate(lerp(color, sky, .38f * horizon)), 1.0f);
     }
     const bool hasTextures = (gMaterialParams.w > 0.5f);
+    const float2 texDx = ddx(input.uv);
+    const float2 texDy = ddy(input.uv);
+    const bool filterDistantDetail = gCoastalParams.x < -1.5f;
+    const float footprint = max(length(texDx), length(texDy));
 
     // --- マテリアル値の取得 ---
     float4 albedo = gBaseColorFactor;
@@ -186,7 +190,14 @@ float4 PSMain(PSInput input) : SV_Target
 
     if (hasTextures) {
         float4 baseSample = gBaseColorMap.Sample(gSampler, input.uv);
-        if (gCoastalParams.x < -.5f) {
+        if (filterDistantDetail) {
+            float4 area = gBaseColorMap.SampleGrad(gSampler,input.uv + .35f*(texDx+texDy),texDx,texDy) +
+                gBaseColorMap.SampleGrad(gSampler,input.uv + .35f*(texDx-texDy),texDx,texDy) +
+                gBaseColorMap.SampleGrad(gSampler,input.uv + .35f*(-texDx+texDy),texDx,texDy) +
+                gBaseColorMap.SampleGrad(gSampler,input.uv - .35f*(texDx+texDy),texDx,texDy);
+            baseSample = lerp(baseSample,area*.25f,smoothstep(.003f,.016f,footprint));
+        }
+        if (gCoastalParams.x < -.5f && !filterDistantDetail) {
             float inland = Shoreline(input.worldPos.x) - input.worldPos.z;
             float vegetation = CoastalNoise(input.worldPos.xz * .39f) * .7f +
                 CoastalNoise(input.worldPos.xz * 1.37f) * .3f;
@@ -217,6 +228,7 @@ float4 PSMain(PSInput input) : SV_Target
         // 法線マップは [0,1] に詰められているので [-1,1] へ戻す。
         float3 tn = gNormalMap.Sample(gSampler, input.uv).xyz * 2.0f - 1.0f;
         tn.xy *= gMaterialParams.z;   // 強度（0 で法線マップ無効）
+        if (filterDistantDetail) tn.xy *= 1.f - .96f*smoothstep(.003f,.022f,footprint);
         float3x3 TBN = float3x3(normalize(input.tangent),
                                 normalize(input.bitangent),
                                 N);
