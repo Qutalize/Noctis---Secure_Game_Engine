@@ -43,6 +43,8 @@
 
 標準Windows ActionsではWARP・4x MSAAで海岸編624フレームを収録し、固定区間のカメラ姿勢、画素差、移動と出航の軌跡を数値で検査する。別ジョブで三章を24 fpsに揃えて結合し、H.264/AACの全編をデコードする。[撮影コード](../../game/sunset/Main.cpp) · [編集と音源の生成](../../tools/sunset/build_journey.py)
 
+`6e288a5` は50秒、960×540、24 fps、1,200フレーム。海岸の最初の121フレームでカメラ姿勢が一致し、昼と薄暮の画素の99.93%でRGBのいずれかが12階調より大きく変わった。船の開始点と終了点の水平距離は83.39m。MP4は14,452,659バイト。 [収録と全編デコードの結果](https://github.com/Qutalize/Noctis---Secure_Game_Engine/actions/runs/44318610907)
+
 ## 内陸デモ
 
 `InlandTour.exe` の横に `shaders` と `inland-assets` を置く。WASDで移動、Shiftで走り、Tabでマウス視点を切り替える。1・2・3で草原・雨の森・工場に移動し、Escで終了。散策は経路上を進む。対応環境の散策と撮影で4x MSAAを使う。
