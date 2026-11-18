@@ -43,7 +43,7 @@ jobs:
       - name: Capture the previous revision with the same cameras and times
         run: |
           Copy-Item -LiteralPath game/sunset/Main.cpp -Destination coastal-baseline/game/sunset/Main.cpp
-          cmake -S coastal-baseline -B build-baseline -G "Visual Studio 18 2026" -A x64 -DGAME_PROFILE=all -DBUILD_SUNSET_WALK=ON -DCMAKE_CXX_FLAGS=/DSUNSET_BASELINE
+          cmake -S coastal-baseline -B build-baseline -G "Visual Studio 18 2026" -A x64 -DGAME_PROFILE=all -DBUILD_SUNSET_WALK=ON "-DCMAKE_CXX_FLAGS=/EHsc /DSUNSET_BASELINE"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cmake --build build-baseline --config Release --target sunset_walk --parallel 2
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

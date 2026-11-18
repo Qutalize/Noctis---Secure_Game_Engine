@@ -120,6 +120,7 @@ def build_pv(frames, output):
     subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
                     "-framerate", str(FPS), "-i", str(frames / "frame-%04d.ppm"), "-i", str(frames / "pv-mix.wav"),
                     "-c:v", "libx264", "-crf", "19", "-preset", "fast", "-pix_fmt", "yuv420p",
+                    "-maxrate", "2800k", "-bufsize", "2800k",
                     "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", "-shortest", str(video)],
                    check=True)
     probe = json.loads(subprocess.check_output(
@@ -131,15 +132,16 @@ def build_pv(frames, output):
     if (sound["codec_name"], sound["channels"], int(sound["sample_rate"])) != ("aac", 2, RATE):
         raise ValueError("Unexpected audio format")
     duration = float(probe["format"]["duration"])
-    if abs(duration - SECONDS) > .06 or video.stat().st_size > 8 * 1024 * 1024:
-        raise ValueError("Unexpected video duration or size")
+    size = video.stat().st_size
+    if abs(duration - SECONDS) > .06 or size > 8 * 1024 * 1024:
+        raise ValueError(f"Unexpected video duration or size: {duration:.3f} s, {size} bytes")
     subprocess.run(["ffmpeg", "-v", "error", "-xerror", "-i", str(video), "-f", "null", "-"], check=True)
     report = {"duration_s": duration, "video_frames": int(picture["nb_frames"]), "fps": FPS,
               "dimensions": [picture["width"], picture["height"]], "video_codec": "h264",
               "audio_codec": "aac", "audio_channels": 2, "audio_sample_rate_hz": RATE,
               "synthesized_gull_calls_s": [call[0] for call in CALLS],
               "source_audio_peak_fraction": peak, "villa_music_gain_min_max": gain_range,
-              "video_bytes": video.stat().st_size}
+              "video_bytes": size}
     encoded = json.dumps(report, indent=2)
     (output / "pv-results.json").write_text(encoded + "\n", encoding="utf-8")
     print(encoded)
