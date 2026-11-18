@@ -166,7 +166,7 @@ float4 PSMain(PSInput input) : SV_Target
         const float shadow = ComputeShadow(input.worldPos, saturate(dot(normal, sun)));
         const float depth = max(.024f, shore * (.21f + .047f * patch.x) + wave);
         const float daylight = lerp(1.f, .24f, dusk);
-        const float3 bottom = CoastalBottom(seaPosition, depth, view, slope, time, daylight);
+        const float3 bottom = CoastalBottom(seaPosition, depth, view, slope, time, daylight, gBaseColorMap, gSampler);
         const float3 tint = lerp(bottom, float3(.056f, .32f, .45f) * daylight,
                                  smoothstep(2.6f, 4.3f, depth));
         const float3 sea = lerp(tint, sky, fresnel) +
@@ -184,7 +184,12 @@ float4 PSMain(PSInput input) : SV_Target
     float  ao        = 1.0f;
 
     if (hasTextures) {
-        albedo *= gBaseColorMap.Sample(gSampler, input.uv);
+        float4 baseSample = gBaseColorMap.Sample(gSampler, input.uv);
+        if (gMaterialParams.w > 1.5f) {
+            baseSample.rgb = lerp(baseSample.rgb / 12.92f,
+                pow((baseSample.rgb + .055f) / 1.055f, 2.4f), step(.04045f, baseSample.rgb));
+        }
+        albedo *= baseSample;
         // glTF の慣習: ORM テクスチャは R=AO / G=roughness / B=metallic。
         // 係数（gMaterialParams）はテクスチャに乗算する形で使う。
         float3 orm = gOrmMap.Sample(gSampler, input.uv).rgb;

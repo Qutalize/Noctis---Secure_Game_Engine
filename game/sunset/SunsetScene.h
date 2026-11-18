@@ -22,9 +22,13 @@ private:
     Mesh m_sky;
     PbrMaterial m_skyMaterial;
     Mesh m_islands;
+    Mesh m_ruinIsland;
     Mesh m_shore;
-    Mesh m_ruins;
-    Mesh m_boardwalk;
+    GltfProp m_ruins;
+    GltfProp m_boardwalk;
+    GltfProp m_villa;
+    Mesh m_foreshore;
+    PbrMaterial m_sandMaterial;
     Mesh m_restaurant;
     GltfProp m_rock;
     GltfProp m_diningSet;

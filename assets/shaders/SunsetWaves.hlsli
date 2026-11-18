@@ -29,7 +29,8 @@ float2 FineRipples(float2 uv, float time)
     return ripples * (1.f - smoothstep(.28f, 1.25f, footprint));
 }
 
-float3 CoastalBottom(float2 seaPosition, float depth, float3 view, float2 slope, float time, float daylight)
+float3 CoastalBottom(float2 seaPosition, float depth, float3 view, float2 slope, float time, float daylight,
+                     Texture2D bedMap, SamplerState bedSampler)
 {
     float path = depth / max(.28f, view.y);
     float2 bottomUV = seaPosition - path * (view.xz * .56f + slope * .46f);
@@ -39,8 +40,10 @@ float3 CoastalBottom(float2 seaPosition, float depth, float3 view, float2 slope,
     float caustic = 1.f - smoothstep(.035f, .16f, abs(shift.x - shift.y));
     float footprint = max(length(ddx(rippleUV)), length(ddy(rippleUV)));
     caustic *= (1.f - smoothstep(.24f, .95f, footprint)) * exp(-.63f * depth);
-    float sand = CoastalNoise(bottomUV * 1.14f) * .65f + CoastalNoise(bottomUV * 4.3f) * .35f;
-    float3 bed = lerp(float3(.54f, .47f, .30f), float3(.85f, .75f, .54f), sand);
+    float2 sandUV = bottomUV / 3.2f;
+    float footprintSand = max(length(ddx(sandUV)), length(ddy(sandUV)));
+    float3 sampledSand = bedMap.Sample(bedSampler, sandUV).rgb;
+    float3 bed = lerp(sampledSand, float3(.71f, .66f, .54f), smoothstep(.014f, .08f, footprintSand));
     float3 transport = exp(-path * float3(.98f, .30f, .19f));
     float3 scatter = float3(.071f, .39f, .46f) * daylight;
     return bed * (daylight + .18f * caustic * daylight) * transport + scatter * (1.f - transport);

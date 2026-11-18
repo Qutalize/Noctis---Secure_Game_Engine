@@ -77,12 +77,26 @@ void Renderer::Shutdown() {
     m_initialized = false;
 }
 
-bool Renderer::Initialize(HWND hwnd, int width, int height, bool basicOnly) {
+bool Renderer::Initialize(HWND hwnd, int width, int height, bool basicOnly, bool multisample) {
     if (width <= 0 || height <= 0) throw std::invalid_argument("Invalid render dimensions");
     m_width  = width;
     m_height = height;
 
     CreateDevice(hwnd == nullptr);
+    m_sampleCount = 1;
+    if (multisample) {
+        constexpr UINT samples = 4;
+        D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS color{
+            DXGI_FORMAT_R8G8B8A8_UNORM, samples, D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE, 0};
+        auto depth = color;
+        depth.Format = DXGI_FORMAT_D32_FLOAT;
+        if (SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &color, sizeof(color))) &&
+            SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &depth, sizeof(depth))) &&
+            color.NumQualityLevels > 0 && depth.NumQualityLevels > 0) {
+            m_sampleCount = samples;
+        }
+        LOG_INFO("Main pass sample count: %u", m_sampleCount);
+    }
 #if ENGINE_RAY_TRACING
     m_rayScene = std::make_unique<RayTracingScene>(m_device.Get());
 #endif
@@ -292,10 +306,9 @@ void Renderer::CreateSwapChain(HWND hwnd) {
 }
 
 void Renderer::CreateRenderTargets() {
-    // RTV ヒープ: スワップチェーンのバッファ数ぶん。
-    // 根拠 = kFrameCount（バックバッファ 1 つにつき RTV 1 つ）
+    const UINT bufferCount = m_swapChain ? kFrameCount : 1;
     D3D12_DESCRIPTOR_HEAP_DESC rtvDesc = {};
-    rtvDesc.NumDescriptors = m_swapChain ? kFrameCount : 1;
+    rtvDesc.NumDescriptors = bufferCount + (m_sampleCount > 1 ? 1 : 0);
     rtvDesc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     rtvDesc.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     DX_CHECK(m_device->CreateDescriptorHeap(&rtvDesc, IID_PPV_ARGS(&m_rtvHeap)));
@@ -304,7 +317,7 @@ void Renderer::CreateRenderTargets() {
 
     D3D12_CPU_DESCRIPTOR_HANDLE handle =
         m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
-    for (UINT i = 0; i < rtvDesc.NumDescriptors; ++i) {
+    for (UINT i = 0; i < bufferCount; ++i) {
         if (m_swapChain) {
             DX_CHECK(m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_renderTargets[i])));
         } else {
@@ -325,6 +338,16 @@ void Renderer::CreateRenderTargets() {
         m_device->CreateRenderTargetView(m_renderTargets[i].Get(), nullptr, handle);
         handle.ptr += m_rtvDescriptorSize;
     }
+    if (m_sampleCount > 1) {
+        auto target = m_renderTargets[0]->GetDesc();
+        target.SampleDesc = {m_sampleCount, 0};
+        target.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        const auto hp = HeapProps(D3D12_HEAP_TYPE_DEFAULT);
+        DX_CHECK(m_device->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &target,
+            D3D12_RESOURCE_STATE_RESOLVE_SOURCE, nullptr, IID_PPV_ARGS(&m_multisampleTarget)));
+        m_multisampleRtv = handle;
+        m_device->CreateRenderTargetView(m_multisampleTarget.Get(), nullptr, m_multisampleRtv);
+    }
 }
 
 void Renderer::CreateDepthBuffer() {
@@ -344,7 +367,7 @@ void Renderer::CreateDepthBuffer() {
     depthDesc.DepthOrArraySize = 1;
     depthDesc.MipLevels        = 1;
     depthDesc.Format           = DXGI_FORMAT_D32_FLOAT;
-    depthDesc.SampleDesc.Count = 1;
+    depthDesc.SampleDesc.Count = m_sampleCount;
     depthDesc.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     depthDesc.Flags            = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
@@ -361,7 +384,7 @@ void Renderer::CreateDepthBuffer() {
 
     D3D12_DEPTH_STENCIL_VIEW_DESC dsv = {};
     dsv.Format        = DXGI_FORMAT_D32_FLOAT;
-    dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+    dsv.ViewDimension = m_sampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMS : D3D12_DSV_DIMENSION_TEXTURE2D;
     dsv.Flags         = D3D12_DSV_FLAG_NONE;
     m_device->CreateDepthStencilView(
         m_depthBuffer.Get(), &dsv,
@@ -480,7 +503,8 @@ void Renderer::CreatePipelineState() {
     pso.NumRenderTargets      = 1;
     pso.RTVFormats[0]         = DXGI_FORMAT_R8G8B8A8_UNORM;
     pso.DSVFormat             = DXGI_FORMAT_D32_FLOAT;
-    pso.SampleDesc.Count      = 1;
+    pso.SampleDesc.Count      = m_sampleCount;
+    pso.RasterizerState.MultisampleEnable = m_sampleCount > 1;
     pso.SampleMask            = UINT_MAX;
 
     // ラスタライザー: カリングなし（両面描画）
@@ -1023,7 +1047,8 @@ void Renderer::CreateTexturePipelineState() {
     pso.NumRenderTargets      = 1;
     pso.RTVFormats[0]         = DXGI_FORMAT_R8G8B8A8_UNORM;
     pso.DSVFormat             = DXGI_FORMAT_D32_FLOAT;
-    pso.SampleDesc.Count      = 1;
+    pso.SampleDesc.Count      = m_sampleCount;
+    pso.RasterizerState.MultisampleEnable = m_sampleCount > 1;
     pso.SampleMask            = UINT_MAX;
 
     pso.RasterizerState.FillMode              = D3D12_FILL_MODE_SOLID;
@@ -1611,7 +1636,8 @@ void Renderer::CreatePbrPipelineState() {
     pso.NumRenderTargets      = 1;
     pso.RTVFormats[0]         = DXGI_FORMAT_R8G8B8A8_UNORM;
     pso.DSVFormat             = DXGI_FORMAT_D32_FLOAT;
-    pso.SampleDesc.Count      = 1;
+    pso.SampleDesc.Count      = m_sampleCount;
+    pso.RasterizerState.MultisampleEnable = m_sampleCount > 1;
     pso.SampleMask            = UINT_MAX;
 
     pso.RasterizerState.FillMode        = D3D12_FILL_MODE_SOLID;
@@ -1926,7 +1952,8 @@ void Renderer::CreateSkinnedPipelineState() {
     pso.NumRenderTargets      = 1;
     pso.RTVFormats[0]         = DXGI_FORMAT_R8G8B8A8_UNORM;
     pso.DSVFormat             = DXGI_FORMAT_D32_FLOAT;
-    pso.SampleDesc.Count      = 1;
+    pso.SampleDesc.Count      = m_sampleCount;
+    pso.RasterizerState.MultisampleEnable = m_sampleCount > 1;
     pso.SampleMask            = UINT_MAX;
 
     pso.RasterizerState.FillMode        = D3D12_FILL_MODE_SOLID;
@@ -2210,13 +2237,17 @@ void Renderer::BeginMainPass() {
     m_commandList->RSSetViewports(1, &vp);
     m_commandList->RSSetScissorRects(1, &scissor);
 
-    // バックバッファを PRESENT → RENDER_TARGET に遷移
-    Transition(m_commandList.Get(), m_renderTargets[m_frameIndex].Get(),
-               D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
     D3D12_CPU_DESCRIPTOR_HANDLE rtv =
         m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
     rtv.ptr += static_cast<SIZE_T>(m_frameIndex) * m_rtvDescriptorSize;
+    if (m_multisampleTarget) {
+        Transition(m_commandList.Get(), m_multisampleTarget.Get(),
+                   D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        rtv = m_multisampleRtv;
+    } else {
+        Transition(m_commandList.Get(), m_renderTargets[m_frameIndex].Get(),
+                   D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    }
     D3D12_CPU_DESCRIPTOR_HANDLE dsv =
         m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
 
@@ -2350,7 +2381,7 @@ void Renderer::WriteCbAndDraw(const Mesh& mesh, const XMMATRIX& world,
         cb.baseColorFactor = pbr->baseColorFactor;
         cb.materialParams  = XMFLOAT4{ pbr->metallicFactor, pbr->roughnessFactor,
                                        pbr->normalScale,
-                                       pbr->hasTextures ? 1.0f : 0.0f };
+                                       pbr->hasTextures ? (pbr->baseColorSrgb ? 2.0f : 1.0f) : 0.0f };
         cb.coastalParams = pbr->coastalParams;
     } else {
         cb.baseColorFactor = XMFLOAT4{ 1.0f, 1.0f, 1.0f, 1.0f };
@@ -2400,9 +2431,16 @@ void Renderer::EndFrame() {
     BeginMainPass();
     ReplayDrawList();
 
-    // RENDER_TARGET → PRESENT に戻す
-    Transition(m_commandList.Get(), m_renderTargets[m_frameIndex].Get(),
-               D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    auto* target = m_renderTargets[m_frameIndex].Get();
+    if (m_multisampleTarget) {
+        Transition(m_commandList.Get(), m_multisampleTarget.Get(),
+                   D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+        Transition(m_commandList.Get(), target, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RESOLVE_DEST);
+        m_commandList->ResolveSubresource(target, 0, m_multisampleTarget.Get(), 0, DXGI_FORMAT_R8G8B8A8_UNORM);
+        Transition(m_commandList.Get(), target, D3D12_RESOURCE_STATE_RESOLVE_DEST, D3D12_RESOURCE_STATE_PRESENT);
+    } else {
+        Transition(m_commandList.Get(), target, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    }
 
     DX_CHECK(m_commandList->Close());
     ID3D12CommandList* lists[] = { m_commandList.Get() };

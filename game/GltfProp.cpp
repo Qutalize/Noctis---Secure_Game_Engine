@@ -5,7 +5,7 @@
 
 using namespace DirectX;
 
-bool GltfProp::Load(Renderer& renderer, const std::string& path) {
+bool GltfProp::Load(Renderer& renderer, const std::string& path, bool baseColorSrgb) {
     m_parts.clear();
     m_loaded = false;
 
@@ -43,6 +43,7 @@ bool GltfProp::Load(Renderer& renderer, const std::string& path) {
             part.pbrMaterial = renderer.CreatePbrMaterial(baseTex, nrmTex, ormTex);
             if (part.pbrMaterial.valid) {
                 part.pbrMaterial.baseColorFactor = prim.baseColor;
+                part.pbrMaterial.baseColorSrgb   = baseColorSrgb;
                 part.pbrMaterial.metallicFactor  = prim.metallicFactor;
                 part.pbrMaterial.roughnessFactor = prim.roughnessFactor;
                 part.pbrMaterial.normalScale     = prim.normalScale;

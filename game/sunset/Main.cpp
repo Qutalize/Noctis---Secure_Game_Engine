@@ -263,15 +263,29 @@ int Capture(const fs::path& directory) {
     return 0;
 }
 
-int CaptureRevision(const fs::path& directory, int scale) {
+UINT InitializeCoastalView(Renderer& renderer, HWND window, int width, int height, bool multisample) {
+#ifdef SUNSET_BASELINE
+    (void)multisample;
+    renderer.Initialize(window, width, height);
+    return 1;
+#else
+    renderer.Initialize(window, width, height, false, multisample);
+    return renderer.SampleCount();
+#endif
+}
+
+int CaptureRevision(const fs::path& directory, int scale, bool multisample = false) {
     if (!fs::create_directory(directory)) throw std::runtime_error("Comparison directory must be new");
     Renderer renderer;
-    renderer.Initialize(nullptr, kWidth * scale, kHeight * scale);
+    const auto samples = InitializeCoastalView(renderer, nullptr, kWidth * scale, kHeight * scale, multisample);
+    if (multisample && samples != 4) throw std::runtime_error("WARP did not provide 4x MSAA");
     if (!renderer.IsPbrAvailable() || !renderer.IsShadowEnabled()) throw std::runtime_error("Missing PBR or shadow pipeline");
     sunset::Scene scene(renderer);
     for (const auto& [name, camera, time, daylight] : {
              std::tuple{"wide", ComparisonCamera(0.f), 0.f, 0.f},
              std::tuple{"shallows", LookAt({-8.1f, 4.2f, -12.1f}, {-8.3f, -.65f, -4.4f}), 4.f, .12f},
+             std::tuple{"pier", LookAt({-.62f, 1.69f, -11.75f}, {.42f, .94f, 5.f}), 6.f, .21f},
+             std::tuple{"villa", LookAt({3.32f, 1.83f, 1.15f}, {8.35f, 2.28f, 6.19f}), 11.5f, .59f},
              std::tuple{"ruins", LookAt({-4.4f, 12.f, 44.f}, {-32.f, 8.5f, 128.f}), 7.f, .33f},
              std::tuple{"dining", LookAt({-.3f, 1.74f, 22.3f}, {3.46f, 1.72f, 26.4f}), 19.f, .97f}}) {
         scene.Draw(renderer, camera, sunset::Detail::Detailed, time, daylight);
@@ -305,9 +319,10 @@ int RenderPv(const fs::path& directory) {
     return 0;
 }
 
-void SetTitle(HWND window, sunset::Detail detail) {
+void SetTitle(HWND window, sunset::Detail detail, UINT samples) {
     const wchar_t* name = detail == sunset::Detail::Detailed ? L"Detailed" : L"Simple";
     const std::wstring title = std::wstring(L"Noctis | Sunset Harbor | ") + name +
+        (samples > 1 ? L" | 4x MSAA" : L" | AA off") +
         L" | WASD: Walk / Tab: Mouse / F2: Assets / R: Reset / Esc: Quit";
     SetWindowTextW(window, title.c_str());
 }
@@ -318,12 +333,12 @@ int Play() {
         throw std::runtime_error("Window initialization failed");
     }
     Renderer renderer;
-    renderer.Initialize(window.GetHandle(), kWidth, kHeight);
+    const auto samples = InitializeCoastalView(renderer, window.GetHandle(), kWidth, kHeight, true);
     if (!renderer.IsPbrAvailable() || !renderer.IsShadowEnabled()) throw std::runtime_error("Missing PBR or shadow pipeline");
     sunset::Scene scene(renderer);
     Walk walk;
     auto detail = sunset::Detail::Detailed;
-    SetTitle(window.GetHandle(), detail);
+    SetTitle(window.GetHandle(), detail, samples);
 
     auto previous = std::chrono::steady_clock::now();
     float animationTime = 0.f;
@@ -346,7 +361,7 @@ int Play() {
         const bool changeAsset = input.IsKeyDown(VK_F2);
         if (changeAsset && !assetHeld) {
             detail = detail == sunset::Detail::Detailed ? sunset::Detail::Simple : sunset::Detail::Detailed;
-            SetTitle(window.GetHandle(), detail);
+            SetTitle(window.GetHandle(), detail, samples);
         }
         assetHeld = changeAsset;
 
@@ -385,8 +400,9 @@ int wmain(int argc, wchar_t** argv) {
         if (argc == 3 && operation == L"--capture") return Capture(argv[2]);
         if (argc == 3 && operation == L"--compare") return CaptureRevision(argv[2], 1);
         if (argc == 3 && operation == L"--compare-aa") return CaptureRevision(argv[2], kPvSupersample);
+        if (argc == 3 && operation == L"--compare-msaa") return CaptureRevision(argv[2], 1, true);
         if (argc == 3 && operation == L"--pv-frames") return RenderPv(argv[2]);
-        throw std::runtime_error("Usage: SunsetWalk.exe [--self-test | --capture | --compare | --compare-aa | --pv-frames]");
+        throw std::runtime_error("Usage: SunsetWalk.exe [--self-test | --capture | --compare | --compare-aa | --compare-msaa | --pv-frames]");
     } catch (const std::exception& error) {
         std::fprintf(stderr, "SunsetWalk: %s\n", error.what());
         return 1;

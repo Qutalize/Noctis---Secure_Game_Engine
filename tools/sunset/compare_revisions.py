@@ -12,20 +12,27 @@ def changed(first, second, threshold):
     return round(100 * pixels / (WIDTH * HEIGHT), 2)
 
 
-def compare(baseline, native, supersampled, output):
+def compare(baseline, native, supersampled, multisampled, output):
     results = {}
-    for shot in ("wide", "shallows", "ruins", "dining"):
+    for shot in ("wide", "shallows", "pier", "villa", "ruins", "dining"):
         renders = {}
-        for label, directory in (("before", baseline), ("after", native), ("after-aa", supersampled)):
+        for label, directory in (("before", baseline), ("after", native), ("after-aa", supersampled),
+                                 ("after-msaa", multisampled)):
             renders[label] = read_ppm(directory / (shot + ".ppm"))
             write_png(output / f"{shot}-{label}.png", renders[label])
         revision = changed(renders["before"], renders["after"], 8)
         aa = changed(renders["after"], renders["after-aa"], 3)
-        if revision < .5 or aa < .02:
-            raise ValueError(f"Changes were not observable in {shot}: scene={revision}%, AA={aa}%")
+        msaa = changed(renders["after"], renders["after-msaa"], 3)
+        if aa < .02 or msaa < .02:
+            raise ValueError(f"AA changes were not observable in {shot}: SSAA={aa}%, MSAA={msaa}%")
         results[shot] = {"scene_pixels_changed_rgb_gt_8_percent": revision,
-                         "aa_pixels_changed_rgb_gt_3_percent": aa}
-    report = {"baseline": "db8813c94bcb3f6c7b24b7c19dc83200933f7ae1", "output": [WIDTH, HEIGHT],
+                         "ssaa_pixels_changed_rgb_gt_3_percent": aa,
+                         "msaa_pixels_changed_rgb_gt_3_percent": msaa}
+    for shot in ("pier", "villa", "ruins"):
+        if results[shot]["scene_pixels_changed_rgb_gt_8_percent"] < .5:
+            raise ValueError(f"No observable architecture change in {shot}")
+    report = {"baseline": "1219ab938b674f6d561990c8ded8c6f9b4facc91", "output": [WIDTH, HEIGHT],
+              "msaa_samples": 4,
               "native_render": [WIDTH, HEIGHT], "ssaa_render": [WIDTH * 2, HEIGHT * 2], "shots": results}
     encoded = json.dumps(report, indent=2)
     (output / "revision-comparison.json").write_text(encoded + "\n", encoding="utf-8")

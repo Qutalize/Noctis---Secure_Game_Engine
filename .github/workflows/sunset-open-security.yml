@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/checkout@v6
         with:
-          ref: db8813c94bcb3f6c7b24b7c19dc83200933f7ae1
+          ref: 1219ab938b674f6d561990c8ded8c6f9b4facc91
           path: coastal-baseline
       - name: Check video and asset conversion tools
         run: |
@@ -43,17 +43,20 @@ jobs:
       - name: Capture the previous revision with the same cameras and times
         run: |
           Copy-Item -LiteralPath game/sunset/Main.cpp -Destination coastal-baseline/game/sunset/Main.cpp
-          cmake -S coastal-baseline -B build-baseline -G "Visual Studio 18 2026" -A x64 -DGAME_PROFILE=all -DBUILD_SUNSET_WALK=ON
+          cmake -S coastal-baseline -B build-baseline -G "Visual Studio 18 2026" -A x64 -DGAME_PROFILE=all -DBUILD_SUNSET_WALK=ON -DCMAKE_CXX_FLAGS=/DSUNSET_BASELINE
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cmake --build build-baseline --config Release --target sunset_walk --parallel 2
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item -Path build-ci/Release/coastal-assets -Destination build-baseline/Release/coastal-assets -Recurse
           & build-baseline/Release/SunsetWalk.exe --compare comparison-before
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & build-ci/Release/SunsetWalk.exe --compare comparison-after
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & build-ci/Release/SunsetWalk.exe --compare-aa comparison-ssaa
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python -B tools/sunset/compare_revisions.py comparison-before comparison-after comparison-ssaa sunset-evidence
+          & build-ci/Release/SunsetWalk.exe --compare-msaa comparison-msaa
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -B tools/sunset/compare_revisions.py comparison-before comparison-after comparison-ssaa comparison-msaa sunset-evidence
       - uses: actions/upload-artifact@v7
         with:
           name: coastal-reference-frames
@@ -61,6 +64,7 @@ jobs:
             sunset-evidence/*-before.png
             sunset-evidence/*-after.png
             sunset-evidence/*-after-aa.png
+            sunset-evidence/*-after-msaa.png
             sunset-evidence/revision-comparison.json
           if-no-files-found: error
           retention-days: 2

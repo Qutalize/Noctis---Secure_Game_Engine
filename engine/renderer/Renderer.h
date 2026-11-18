@@ -95,6 +95,7 @@ struct PbrMaterial {
     float roughnessFactor = 1.0f;
     float normalScale     = 1.0f;
     bool  hasTextures     = false;
+    bool  baseColorSrgb   = false;
     bool  valid           = false;
     DirectX::XMFLOAT4 coastalParams{};
 };
@@ -178,7 +179,8 @@ public:
 
     // basicOnly: 射撃場のLit+Overlayだけを初期化する。
     // A null window selects deterministic WARP rendering for offline validation.
-    bool Initialize(HWND hwnd, int width, int height, bool basicOnly = false);
+    bool Initialize(HWND hwnd, int width, int height, bool basicOnly = false, bool multisample = false);
+    UINT SampleCount() const { return m_sampleCount; }
 
     // Call after EndFrame on an offscreen renderer. Returns tightly packed RGBA8.
     std::vector<uint8_t> ReadOffscreenRgba();
@@ -557,6 +559,9 @@ private:
     UINT m_rtvDescriptorSize = 0;
 
     ComPtr<ID3D12Resource>          m_renderTargets[kFrameCount];
+    ComPtr<ID3D12Resource> m_multisampleTarget;
+    D3D12_CPU_DESCRIPTOR_HANDLE m_multisampleRtv{};
+    UINT m_sampleCount = 1;
     ComPtr<ID3D12CommandAllocator>  m_commandAllocators[kFrameCount];
     ComPtr<ID3D12GraphicsCommandList> m_commandList;
 

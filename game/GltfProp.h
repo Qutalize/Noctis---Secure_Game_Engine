@@ -18,7 +18,7 @@
 class GltfProp {
 public:
     // path の .glb/.gltf を読み込む。成功/失敗はログに出る。
-    bool Load(Renderer& renderer, const std::string& path);
+    bool Load(Renderer& renderer, const std::string& path, bool baseColorSrgb = false);
 
     bool IsLoaded() const { return m_loaded; }
 

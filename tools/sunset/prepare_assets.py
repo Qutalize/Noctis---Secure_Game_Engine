@@ -6,9 +6,12 @@ import subprocess
 import sys
 import urllib.request
 
+from build_architecture import build_architecture
+
 
 def prepare(output):
     inventory = json.loads(Path(__file__).with_name("coastal-assets.json").read_text(encoding="utf-8"))
+    inventory.update(json.loads(Path(__file__).with_name("architecture-materials.json").read_text(encoding="utf-8")))
     for model, files in inventory.items():
         directory = output / model
         for name, (url, expected) in files.items():
@@ -37,7 +40,8 @@ def prepare(output):
                 target.write_text(json.dumps(gltf, separators=(",", ":")), encoding="utf-8")
             else:
                 target.write_bytes(original)
-        print(f"Verified CC0 model: {model} ({len(files)} source files)")
+        print(f"Verified CC0 asset: {model} ({len(files)} source files)")
+    build_architecture(output)
 
 
 if __name__ == "__main__":

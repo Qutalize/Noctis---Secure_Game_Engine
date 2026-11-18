@@ -1,9 +1,11 @@
 #include "game/sunset/SunsetScene.h"
+#include "engine/renderer/PngLoader.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <initializer_list>
 #include <iterator>
 #include <numbers>
@@ -187,18 +189,8 @@ void Arch(MeshData& mesh, float x, float z, bool detailed) {
 
 MeshData Harbor(bool detailed) {
     MeshData data;
-    StoneBox(data, -3.05f, -.32f, -1.f, 6.10f, .31f, 17.f);
     StoneBox(data, 3.10f, -.26f, -5.f, 9.f, .25f, 14.f);
     StoneBox(data, 3.04f, -.06f, -4.5f, 1.30f, .06f, 13.f);
-    if (detailed) {
-        for (int z = -1; z < 16; ++z) {
-            const float shift = z % 2 == 0 ? .0f : .2f;
-            for (int x = 0; x < 7; ++x) {
-                StoneBox(data, -2.98f + x * .84f + shift, -.014f, static_cast<float>(z) + .04f,
-                         .80f, .019f, .92f);
-            }
-        }
-    }
     for (const float position : {1.f, 5.4f, 9.8f}) {
         Arch(data, .28f, position, detailed);
         StoneBox(data, -3.06f, -.01f, position, .35f, .66f, 3.25f);
@@ -232,45 +224,6 @@ MeshData Harbor(bool detailed) {
     return data;
 }
 
-Texture StoneTexture(Renderer& renderer) {
-    constexpr unsigned edge = 128;
-    std::vector<uint8_t> pixels(edge * edge * 4);
-    for (unsigned y = 0; y < edge; ++y) {
-        for (unsigned x = 0; x < edge; ++x) {
-            const float u = static_cast<float>(x) / edge;
-            const float v = static_cast<float>(y) / edge;
-            const float grain = .69f + .19f * CloudNoise(u * 6.f, v * 5.f) +
-                .09f * CloudNoise(u * 17.f, v * 25.f) + .03f * Pattern(u * 4.f, v * 8.f);
-            const auto at = (y * edge + x) * 4;
-            pixels[at] = static_cast<uint8_t>(255.f * grain);
-            pixels[at + 1] = static_cast<uint8_t>(231.f * grain);
-            pixels[at + 2] = static_cast<uint8_t>(185.f * grain);
-            pixels[at + 3] = 255;
-        }
-    }
-    return renderer.CreateTexture(edge, edge, pixels.data());
-}
-
-Texture StoneNormals(Renderer& renderer) {
-    constexpr unsigned edge = 128;
-    std::vector<uint8_t> pixels(edge * edge * 4);
-    for (unsigned y = 0; y < edge; ++y) {
-        for (unsigned x = 0; x < edge; ++x) {
-            const float u = static_cast<float>(x) * 2.f * kPi / edge;
-            const float v = static_cast<float>(y) * 2.f * kPi / edge;
-            const float dx = .09f * std::cos(2.f * u + 3.f * v) +
-                .055f * std::sin(5.f * u - 6.f * v + 1.4f * std::sin(3.f * v));
-            const float dy = .09f * std::cos(3.f * u + 2.f * v) +
-                .050f * std::sin(7.f * u - 4.f * v + 1.3f * std::sin(2.f * u));
-            const auto at = (y * edge + x) * 4;
-            pixels[at] = static_cast<uint8_t>(127.5f * (1.f + dx));
-            pixels[at + 1] = static_cast<uint8_t>(127.5f * (1.f + dy));
-            pixels[at + 2] = static_cast<uint8_t>(127.5f * (1.f + std::sqrt(1.f - dx * dx - dy * dy)));
-            pixels[at + 3] = 255;
-        }
-    }
-    return renderer.CreateTexture(edge, edge, pixels.data());
-}
 
 Mesh SeaGrid(Renderer& renderer) {
     std::vector<float> columns;
@@ -429,10 +382,48 @@ Mesh Shore(Renderer& renderer) {
     return mesh.Upload(renderer);
 }
 
-Mesh Ruins(Renderer& renderer) {
+Texture LoadCoastalMap(Renderer& renderer, const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary | std::ios::ate);
+    const auto length = stream.tellg();
+    if (length <= 0 || length > 8 * 1024 * 1024) throw std::runtime_error("Missing coastal material map");
+    std::vector<uint8_t> bytes(static_cast<std::size_t>(length));
+    stream.seekg(0);
+    PngImage png;
+    std::string error;
+    if (!stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size())) ||
+        !DecodePng(bytes.data(), bytes.size(), png, &error)) {
+        throw std::runtime_error("Could not decode coastal material map: " + error);
+    }
+    return renderer.CreateTexture(png.width, png.height, png.rgba.data());
+}
+
+Mesh Foreshore(Renderer& renderer) {
+    MeshData mesh;
+    for (int strip = -42; strip < 42; ++strip) {
+        const float left = static_cast<float>(strip);
+        const float right = left + 1.f;
+        const float backLeft = 3.4f + 2.4f * CloudNoise(left * .24f, 1.7f);
+        const float backRight = 3.4f + 2.4f * CloudNoise(right * .24f, 1.7f);
+        for (int band = 0; band < 6; ++band) {
+            const float near = std::lerp(-.78f, backLeft, band / 6.f);
+            const float far = std::lerp(-.78f, backLeft, (band + 1) / 6.f);
+            const float nearRight = std::lerp(-.78f, backRight, band / 6.f);
+            const float farRight = std::lerp(-.78f, backRight, (band + 1) / 6.f);
+            mesh.Quad({{BeachVertex(left, far), BeachVertex(right, farRight),
+                        BeachVertex(right, nearRight), BeachVertex(left, near)}});
+        }
+    }
+    for (auto& vertex : mesh.vertices) {
+        vertex.position.y += .033f;
+        vertex.uv = {vertex.position.x / 3.2f, vertex.position.z / 3.2f};
+    }
+    return renderer.CreatePbrMesh(mesh.vertices, mesh.indices);
+}
+
+Mesh RuinIsland(Renderer& renderer) {
     ColoredMesh mesh;
-    constexpr XMFLOAT4 cliff{.53f, .60f, .67f, 1};
-    constexpr XMFLOAT4 masonry{.61f, .66f, .69f, 1};
+    constexpr XMFLOAT4 cliff{.39f, .41f, .39f, 1};
+    constexpr XMFLOAT4 masonry{.43f, .46f, .39f, 1};
     const float islandX = -31.f, islandZ = 129.f;
     for (int face = 0; face < 19; ++face) {
         const auto coast = [&](int section, bool top) {
@@ -445,59 +436,6 @@ Mesh Ruins(Renderer& renderer) {
         mesh.Face({coast(face, false), coast(face + 1, false), coast(face + 1, true), coast(face, true)}, cliff);
         mesh.Face({{islandX, 6.5f, islandZ}, coast(face, true), coast(face + 1, true)}, masonry);
     }
-    for (int pillar = 0; pillar < 7; ++pillar) {
-        const float x = islandX - 12.5f + pillar * 3.6f;
-        const float height = std::array{4.5f, 10.5f, 16.f, 16.f, 13.6f, 7.f, 4.4f}[pillar];
-        const float z = islandZ - 4.8f + .66f * pillar;
-        const int blocks = static_cast<int>(height / 1.2f);
-        for (int block = 0; block < blocks; ++block) {
-            const float offset = .27f * Pattern(block * .4f, pillar * 1.1f);
-            mesh.Box(x + offset, 5.7f + block * 1.2f, z + offset, 2.35f, 1.22f, 2.75f, masonry);
-        }
-        if (pillar == 2 || pillar == 4) {
-            mesh.Box(x - .22f, 5.7f + blocks * 1.2f - .12f, z - .20f, 6.0f, 1.25f, 3.11f, masonry);
-        }
-    }
-    return mesh.Upload(renderer);
-}
-
-Mesh Boardwalk(Renderer& renderer) {
-    ColoredMesh mesh;
-    constexpr XMFLOAT4 teak{.39f, .26f, .17f, 1.f};
-    constexpr XMFLOAT4 post{.24f, .17f, .11f, 1.f};
-    for (int plank = 0; plank < 159; ++plank) {
-        const float z = -13.f + plank * .255f;
-        if ((z >= -1.25f && z < 16.f) || z >= 18.6f) continue;
-        const float wear = .76f + .33f * CloudNoise(plank * .73f, .77f);
-        mesh.Box(-2.82f, -.11f, z, 5.63f, .145f, .242f, {teak.x * wear, teak.y * wear, teak.z * wear, 1.f});
-    }
-    for (int pierPost = 0; pierPost < 14; ++pierPost) {
-        const float z = -12.1f + pierPost * 2.23f;
-        for (const float x : {-2.78f, 2.62f}) {
-            mesh.Box(x, -1.54f, z, .17f, 2.43f, .19f, post);
-            if (pierPost < 13) {
-                mesh.Box(x + .037f, .58f, z + .12f, .095f, .075f, 2.16f, teak);
-            }
-        }
-    }
-    for (const float x : {3.38f, 7.36f, 11.72f}) {
-        for (const float z : {-4.47f, -.16f, 4.14f, 8.56f}) {
-            mesh.Box(x, -1.5f, z, .28f, 1.28f, .28f, post);
-        }
-    }
-    for (int plank = 0; plank < 47; ++plank) {
-        const float x = -13.6f + plank * .244f;
-        mesh.Box(x, -.13f, -3.7f, .232f, .15f, 2.65f, teak);
-    }
-    for (const float x : {-13.64f, -11.5f, -9.35f, -7.2f, -5.05f, -2.82f}) {
-        for (const float z : {-3.67f, -1.21f}) mesh.Box(x, -1.47f, z, .16f, 2.12f, .15f, post);
-        mesh.Box(x, .48f, -3.65f, 2.19f, .065f, .08f, teak);
-    }
-    mesh.Box(-13.35f, .03f, -2.3f, .55f, .49f, .65f, post);
-    mesh.Face({{-12.8f, .15f, -2.18f}, {-13.1f, 1.28f, -2.18f}, {-14.45f, 1.83f, -1.89f},
-               {-13.04f, 1.23f, -2.17f}}, post);
-    mesh.Face({{-14.45f, 1.83f, -1.89f}, {-14.51f, -.57f, -1.89f},
-               {-14.46f, -.56f, -1.87f}}, {.57f, .54f, .42f, 1});
     return mesh.Upload(renderer);
 }
 
@@ -554,27 +492,7 @@ Mesh Lanterns(Renderer& renderer) {
 Mesh Resort(Renderer& renderer) {
     ColoredMesh data;
     const XMFLOAT4 plaster{.76f, .55f, .34f, 1.f};
-    const XMFLOAT4 tiles{.48f, .18f, .11f, 1.f};
     const XMFLOAT4 teak{.31f, .16f, .095f, 1.f};
-    const XMFLOAT4 glass{.13f, .27f, .34f, 1.f};
-    const XMFLOAT4 lamplight{1.f, .62f, .28f, 1.f};
-    data.Box(7.42f, .18f, 4.02f, 4.19f, 2.65f, 4.17f, plaster);
-    data.Box(7.23f, 2.71f, 3.80f, 4.58f, .12f, 4.60f, teak);
-    data.Face({{7.18f, 2.82f, 3.73f}, {9.50f, 3.83f, 3.73f},
-               {9.50f, 3.83f, 8.46f}, {7.18f, 2.82f, 8.46f}}, tiles);
-    data.Face({{9.50f, 3.83f, 3.73f}, {11.87f, 2.82f, 3.73f},
-               {11.87f, 2.82f, 8.46f}, {9.50f, 3.83f, 8.46f}}, tiles);
-    data.Face({{11.87f, 2.82f, 3.74f}, {9.50f, 3.83f, 3.74f}, {7.18f, 2.82f, 3.74f}}, plaster);
-    data.Face({{7.18f, 2.82f, 8.45f}, {9.50f, 3.83f, 8.45f}, {11.87f, 2.82f, 8.45f}}, plaster);
-    for (int room = 0; room < 3; ++room) {
-        const float z = 4.34f + room * 1.18f;
-        data.Box(7.38f, .39f, z, .095f, 1.84f, .90f, teak);
-        data.Box(7.35f, .47f, z + .065f, .04f, 1.68f, .77f, glass);
-        data.Box(7.32f, 1.23f, z + .07f, .04f, .054f, .76f, teak);
-        data.Box(7.31f, .48f, z + .44f, .04f, 1.66f, .032f, teak);
-        data.Box(7.10f, 2.02f, z + .93f, .23f, .21f, .17f, lamplight);
-    }
-    data.Box(7.05f, 2.31f, 4.06f, .29f, .11f, 4.13f, teak);
     for (const float z : {-2.4f, .90f, 4.12f}) {
         constexpr float center = 5.25f;
         data.Box(center - .034f, 0.f, z - .034f, .068f, 2.29f, .068f, teak);
@@ -649,20 +567,32 @@ Scene::Scene(Renderer& renderer) {
     const auto models = std::filesystem::path(executable).parent_path() / "coastal-assets";
     const auto load = [&](GltfProp& prop, const char* name) {
         const auto path = (models / name / (std::string(name) + "_1k.gltf")).u8string();
-        if (!prop.Load(renderer, std::string(path.begin(), path.end()))) {
+        if (!prop.Load(renderer, std::string(path.begin(), path.end()), true)) {
             throw std::runtime_error(std::string("Missing coastal asset: ") + name);
         }
     };
     load(m_rock, "rock_face_01");
     load(m_diningSet, "outdoor_table_chair_set_01");
     load(m_chandelier, "lantern_chandelier_01");
+    load(m_boardwalk, "pier");
+    load(m_villa, "villa");
+    load(m_ruins, "ruins");
     m_sky = Sky(renderer);
     m_skyMaterial = renderer.CreatePbrMaterial(nullptr, nullptr, nullptr);
     m_skyMaterial.coastalParams.x = 2.f;
     m_islands = Islands(renderer);
-    m_ruins = Ruins(renderer);
+    m_ruinIsland = RuinIsland(renderer);
     m_shore = Shore(renderer);
-    m_boardwalk = Boardwalk(renderer);
+    m_foreshore = Foreshore(renderer);
+    const auto sand = models / "coast_sand_01";
+    const auto sandColor = LoadCoastalMap(renderer, sand / "diff.png");
+    const auto sandNormal = LoadCoastalMap(renderer, sand / "nor_gl.png");
+    const auto sandOrm = LoadCoastalMap(renderer, sand / "arm.png");
+    m_sandMaterial = renderer.CreatePbrMaterial(&sandColor, &sandNormal, &sandOrm);
+    m_sandMaterial.baseColorSrgb = true;
+    m_sandMaterial.baseColorFactor = {1.f, .97f, .89f, 1.f};
+    m_sandMaterial.normalScale = .58f;
+    m_sandMaterial.metallicFactor = 0.f;
     m_restaurant = Restaurant(renderer);
     m_lanterns = Lanterns(renderer);
     m_lanternMaterial = renderer.CreatePbrMaterial(nullptr, nullptr, nullptr);
@@ -670,23 +600,28 @@ Scene::Scene(Renderer& renderer) {
     m_lanternMaterial.coastalParams.x = 3.f;
 
     m_water = SeaGrid(renderer);
-    m_waterMaterial = renderer.CreatePbrMaterial(nullptr, nullptr, nullptr);
+    m_waterMaterial = renderer.CreatePbrMaterial(&sandColor, &sandNormal, &sandOrm);
     m_waterMaterial.coastalParams.x = 1.f;
     m_resort = Resort(renderer);
     m_boat = Boat(renderer);
     m_leftWing = Wing(renderer, -1.f);
     m_rightWing = Wing(renderer, 1.f);
 
-    const auto stoneTexture = StoneTexture(renderer);
-    const auto stoneNormals = StoneNormals(renderer);
+    const auto stone = models / "large_sandstone_blocks_01";
+    const auto stoneTexture = LoadCoastalMap(renderer, stone / "diff.png");
+    const auto stoneNormals = LoadCoastalMap(renderer, stone / "nor_gl.png");
+    const auto stoneOrm = LoadCoastalMap(renderer, stone / "arm.png");
     for (const auto detail : {Detail::Simple, Detail::Detailed}) {
         const bool detailed = detail == Detail::Detailed;
         const auto data = Harbor(detailed);
         auto& buildings = detailed ? m_detailed : m_simple;
         buildings.geometry = renderer.CreatePbrMesh(data.vertices, data.indices);
         buildings.material = renderer.CreatePbrMaterial(detailed ? &stoneTexture : nullptr,
-                                                        detailed ? &stoneNormals : nullptr, nullptr);
-        buildings.material.baseColorFactor = {.69f, .52f, .34f, 1.f};
+                                                        detailed ? &stoneNormals : nullptr,
+                                                        detailed ? &stoneOrm : nullptr);
+        buildings.material.baseColorFactor = detailed ? XMFLOAT4{1.f, .97f, .89f, 1.f}
+                                                       : XMFLOAT4{.69f, .52f, .34f, 1.f};
+        buildings.material.baseColorSrgb = detailed;
         buildings.material.normalScale = .72f;
         buildings.material.roughnessFactor = detailed ? .57f : .69f;
         buildings.material.metallicFactor = 0.f;
@@ -717,7 +652,8 @@ void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float 
     const auto& eye = camera.GetPosition();
     renderer.DrawPbrMesh(m_sky, m_skyMaterial, XMMatrixTranslation(eye.x, eye.y, eye.z), true);
     renderer.DrawMesh(m_islands, identity);
-    renderer.DrawMesh(m_ruins, identity);
+    renderer.DrawMesh(m_ruinIsland, identity);
+    m_ruins.Draw(renderer, identity);
     for (const auto& [x, y, z, scale, rotation] : {
              std::array{-41.f, -2.3f, 124.f, 3.25f, .32f},
              std::array{-29.6f, -2.9f, 119.7f, 3.55f, -.12f},
@@ -727,9 +663,10 @@ void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float 
                              XMMatrixTranslation(x, y, z));
     }
     renderer.DrawMesh(m_shore, identity);
+    renderer.DrawPbrMesh(m_foreshore, m_sandMaterial, identity);
     m_waterMaterial.coastalParams = {1.f, time, sunset, dusk};
     renderer.DrawPbrMesh(m_water, m_waterMaterial, identity);
-    renderer.DrawMesh(m_boardwalk, identity);
+    m_boardwalk.Draw(renderer, identity);
     renderer.DrawMesh(m_restaurant, identity);
     for (const float side : {-1.f, 1.f}) {
         for (const float z : {21.9f, 24.8f, 27.25f}) {
@@ -745,6 +682,7 @@ void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float 
     const auto& buildings = detail == Detail::Detailed ? m_detailed : m_simple;
     renderer.DrawPbrMesh(buildings.geometry, buildings.material, identity);
     renderer.DrawMesh(m_resort, identity);
+    m_villa.Draw(renderer, identity);
     const float sailAngle = time * .13f;
     const auto boat = XMMatrixRotationZ(.12f * std::sin(1.7f * time)) * XMMatrixRotationY(sailAngle + .55f) *
         XMMatrixTranslation(-10.1f + 4.7f * std::sin(sailAngle), -.55f + .14f * std::sin(time * 1.47f),
