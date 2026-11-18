@@ -140,10 +140,14 @@ struct MeshData {
         XMStoreFloat4(&tangentValue, tangent);
         // Flip the bitangent to agree with corners 0,1,2,3 and their UVs.
         tangentValue.w = -1.f;
-        constexpr XMFLOAT2 uv[] = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+        const XMVECTOR bitangent = XMVector3Cross(normal, tangent) * -1.f;
+        const float offset = std::sin(corners[0].x * 19.5f + corners[0].z * 13.3f + corners[0].y * 5.8f);
         const auto base = static_cast<uint32_t>(vertices.size());
-        for (std::size_t i = 0; i < corners.size(); ++i) {
-            vertices.push_back({corners[i], normalValue, tangentValue, uv[i]});
+        for (const auto& corner : corners) {
+            const XMVECTOR delta = XMLoadFloat3(&corner) - first;
+            const XMFLOAT2 uv{offset + XMVectorGetX(XMVector3Dot(delta, tangent)) * .48f,
+                              offset + XMVectorGetX(XMVector3Dot(delta, bitangent)) * .48f};
+            vertices.push_back({corner, normalValue, tangentValue, uv});
         }
         indices.insert(indices.end(), {base, base + 1, base + 2, base, base + 2, base + 3});
     }
@@ -271,11 +275,12 @@ Texture StoneTexture(Renderer& renderer) {
         for (unsigned x = 0; x < edge; ++x) {
             const float u = static_cast<float>(x) / edge;
             const float v = static_cast<float>(y) / edge;
-            const float grain = .81f + .13f * Pattern(u, v) + .06f * Pattern(u * 7.f, v * 11.f);
+            const float grain = .69f + .19f * CloudNoise(u * 6.f, v * 5.f) +
+                .09f * CloudNoise(u * 17.f, v * 25.f) + .03f * Pattern(u * 4.f, v * 8.f);
             const auto at = (y * edge + x) * 4;
             pixels[at] = static_cast<uint8_t>(255.f * grain);
-            pixels[at + 1] = static_cast<uint8_t>(244.f * grain);
-            pixels[at + 2] = static_cast<uint8_t>(224.f * grain);
+            pixels[at + 1] = static_cast<uint8_t>(231.f * grain);
+            pixels[at + 2] = static_cast<uint8_t>(185.f * grain);
             pixels[at + 3] = 255;
         }
     }
@@ -289,8 +294,10 @@ Texture StoneNormals(Renderer& renderer) {
         for (unsigned x = 0; x < edge; ++x) {
             const float u = static_cast<float>(x) * 2.f * kPi / edge;
             const float v = static_cast<float>(y) * 2.f * kPi / edge;
-            const float dx = .12f * std::cos(6.f * u + 4.f * v) + .09f * std::cos(13.f * u - 7.f * v);
-            const float dy = .14f * std::cos(3.f * u + 8.f * v) + .08f * std::sin(10.f * u - 17.f * v);
+            const float dx = .09f * std::cos(2.f * u + 3.f * v) +
+                .055f * std::sin(5.f * u - 6.f * v + 1.4f * std::sin(3.f * v));
+            const float dy = .09f * std::cos(3.f * u + 2.f * v) +
+                .050f * std::sin(7.f * u - 4.f * v + 1.3f * std::sin(2.f * u));
             const auto at = (y * edge + x) * 4;
             pixels[at] = static_cast<uint8_t>(127.5f * (1.f + dx));
             pixels[at + 1] = static_cast<uint8_t>(127.5f * (1.f + dy));
@@ -396,6 +403,26 @@ Mesh Resort(Renderer& renderer) {
                        {x + .53f, .64f, z + .59f}, {x + .04f, .64f, z + .59f}}, plaster);
         }
     }
+    const XMFLOAT4 terracotta{.60f, .25f, .13f, 1.f};
+    const XMFLOAT4 trunk{.32f, .25f, .16f, 1.f};
+    const XMFLOAT4 leaf{.19f, .35f, .24f, 1.f};
+    for (const XMFLOAT2 base : {XMFLOAT2{10.85f, -2.75f}, XMFLOAT2{11.08f, .81f}, XMFLOAT2{6.59f, 7.90f}}) {
+        data.Box(base.x - .38f, 0.f, base.y - .38f, .76f, .36f, .76f, terracotta);
+        data.Box(base.x - .09f, .34f, base.y - .09f, .18f, 2.42f, .18f, trunk);
+        for (int branch = 0; branch < 9; ++branch) {
+            const float angle = 2.f * kPi * branch / 9.f + base.y;
+            const float side = std::cos(angle), forward = std::sin(angle);
+            const XMFLOAT3 origin{base.x, 2.70f, base.y};
+            const XMFLOAT3 mid{base.x + .69f * side, 3.25f, base.y + .69f * forward};
+            const XMFLOAT3 tip{base.x + 1.56f * side, 2.59f, base.y + 1.56f * forward};
+            const XMFLOAT3 right{mid.x + .15f * forward, mid.y - .07f, mid.z - .15f * side};
+            const XMFLOAT3 left{mid.x - .15f * forward, mid.y - .07f, mid.z + .15f * side};
+            data.Face({origin, right, mid}, leaf);
+            data.Face({mid, right, tip}, leaf);
+            data.Face({origin, mid, left}, leaf);
+            data.Face({left, mid, tip}, leaf);
+        }
+    }
     return data.Upload(renderer);
 }
 
@@ -445,7 +472,7 @@ Scene::Scene(Renderer& renderer) {
         buildings.geometry = renderer.CreatePbrMesh(data.vertices, data.indices);
         buildings.material = renderer.CreatePbrMaterial(detailed ? &stoneTexture : nullptr,
                                                         detailed ? &stoneNormals : nullptr, nullptr);
-        buildings.material.baseColorFactor = {.57f, .48f, .38f, 1.f};
+        buildings.material.baseColorFactor = {.69f, .52f, .34f, 1.f};
         buildings.material.normalScale = .72f;
         buildings.material.roughnessFactor = detailed ? .57f : .69f;
         buildings.material.metallicFactor = 0.f;
