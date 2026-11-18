@@ -681,7 +681,7 @@ void Scene::Draw(Renderer& renderer, const Camera& camera, Detail detail, float 
     m_villa.Draw(renderer, identity);
     m_guest.Draw(renderer, camera, {1.52f, .02f, -4.65f}, .72f);
     m_guest.Draw(renderer, camera, {-10.2f, .02f, -2.37f}, -1.42f);
-    m_guest.Draw(renderer, camera, {5.7f, .02f, 4.4f}, -1.34f);
+    m_guest.Draw(renderer, camera, {6.36f, .036f, 5.94f}, -1.34f);
     m_guest.Draw(renderer, camera, {-19.2f, .01f, -11.15f}, 1.22f);
     m_diners.Draw(renderer, camera, {1.52f, .06f, 25.15f}, -.75f);
     m_diners.Draw(renderer, camera, {14.2f, .01f, -11.38f}, .63f);
