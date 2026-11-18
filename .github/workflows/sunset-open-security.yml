@@ -217,7 +217,7 @@ jobs:
 
   journey:
     needs: [desert-road, inland-tour, journey-coast]
-    runs-on: ubuntu-24.04
+    runs-on: windows-2025
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v6
@@ -235,11 +235,13 @@ jobs:
           path: clips/coast
       - name: Assemble and decode the full film
         run: |
-          if ! command -v ffmpeg || ! command -v ffprobe; then
-            sudo apt-get update && sudo apt-get install -y ffmpeg
-          fi
-          python3 -B tools/sunset/build_journey.py assemble clips/desert/Desert-Road-PV.mp4 clips/inland/Inland-Tour-PV.mp4 clips/coast/voyage.mp4 journey-output
-          cp clips/coast/*.png clips/coast/coastal-voyage.json clips/coast/voyage.csv journey-output/
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          python -B tools/sunset/build_journey.py assemble clips/desert/Desert-Road-PV.mp4 clips/inland/Inland-Tour-PV.mp4 clips/coast/voyage.mp4 journey-output
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item -Path clips/coast/*.png,clips/coast/coastal-voyage.json,clips/coast/voyage.csv -Destination journey-output/
       - uses: actions/upload-artifact@v7
         with:
           name: journey-preview

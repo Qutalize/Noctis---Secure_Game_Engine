@@ -20,7 +20,8 @@ DAY_HOLD_FRAMES = 121
 
 
 def ffmpeg(*args):
-    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y", *args], check=True)
+    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y", *args],
+                   check=True, timeout=240)
 
 
 def probe(path):
@@ -150,7 +151,7 @@ def assemble(desert, inland, coast, output):
     soundtrack(audio)
     video = output/"Noctis-Journey-to-Sea.mp4"
     ffmpeg("-i",str(desert),"-i",str(inland),"-i",str(coast),"-i",str(audio),"-filter_complex",
-           "[0:v][1:v][2:v]concat=n=3:v=1:a=0,fade=t=in:d=0.34,fade=t=out:st=48.55:d=1.45[v]",
+           f"[0:v][1:v][2:v]concat=n=3:v=1:a=0,fps={FPS},fade=t=in:d=0.34,fade=t=out:st=48.55:d=1.45[v]",
            "-map","[v]","-map","3:a:0","-c:v","libx264","-crf","18","-preset","fast",
            "-maxrate","2500k","-bufsize","3000k","-pix_fmt","yuv420p","-c:a","aac","-b:a","160k",
            "-movflags","+faststart",str(video))

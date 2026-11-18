@@ -181,7 +181,7 @@ sunset::VoyagePose BoatOnVoyage(float time) {
 }
 
 float VoyageDaylight(float time) {
-    return .025f + .82f * Ease(time / kHoldUntil) + .14f * Ease((time - kHoldUntil) / 8.f);
+    return .025f + .82f * Ease(time / kHoldUntil) + .081f * Ease((time - kHoldUntil) / 8.f);
 }
 #endif
 
