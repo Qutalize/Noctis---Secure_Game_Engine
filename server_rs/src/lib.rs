@@ -309,6 +309,13 @@ mod tests {
             let own_end = 40 + game.hands[seat].len();
             assert_eq!(&snapshot[40..own_end], game.hands[seat]);
             assert!(snapshot[own_end..].iter().all(|&byte| byte == 0));
+            if let Some(first) = changed.hands[seat].first_mut() {
+                *first = (*first + 1) % 53;
+                let control = changed.snapshot(seat as u8, 0);
+                assert_eq!(&control[..40], &snapshot[..40]);
+                assert_ne!(control[40], snapshot[40]);
+                assert_eq!(&control[41..], &snapshot[41..]);
+            }
         }
     }
     #[test]
@@ -355,7 +362,11 @@ mod tests {
                 break;
             }
             let seat = game.turn;
-            let request = draw(&game, seat);
+            let victim_count = game.hands[game.victim as usize].len();
+            let request = Request {
+                arg: rng.below(victim_count).unwrap() as u8,
+                ..draw(&game, seat)
+            };
             assert_eq!(game.command(seat, &request, &mut rng).unwrap(), 0);
             assert_recipient_snapshots(&game);
         }
