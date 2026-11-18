@@ -10,7 +10,7 @@ from verify_captures import read_ppm, write_png
 FRAME_RATE = 24
 DURATION = 12
 SHOT_FRAMES = {"basin": 22, "road": 142, "sunset-pass": 253}
-INLAND_SHOT_FRAMES = {"grassland": 49, "rain-forest": 149, "factory": 248}
+INLAND_SHOT_FRAMES = {"grassland": 26, "grass-verge": 72, "rain-forest": 149, "factory": 248}
 
 
 def build(frames, output, inland=False):

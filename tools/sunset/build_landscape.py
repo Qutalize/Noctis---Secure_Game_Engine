@@ -14,9 +14,9 @@ GROUND_COLORS = {"meadow": (1., 1., .89, 1.), "trail": (1., .93, .84, 1.),
 GROUND_MAPS = {"meadow": "leafy_grass", "trail": "rocky_trail",
                "forest": "forest_ground_04", "yard": "mud_forest"}
 TREE_COLORS = {"bark": (.76, .75, .72, 1.), "needles": (.62, .84, .67, 1.),
-               "young": (.76, .93, .69, 1.), "grass": (.84, 1., .69, 1.)}
+               "young": (.76, .93, .69, 1.), "grass": (.84, 1., .69, 1.), "stone": (.82, .86, .80, 1.)}
 TREE_MAPS = {"bark": "pine_bark", "needles": "pine_sapling_medium",
-             "young": "pine_sapling_medium", "grass": "grass_medium_01"}
+             "young": "pine_sapling_medium", "grass": "grass_medium_01", "stone": "rocky_trail"}
 
 
 def height(layout, x, z):
@@ -117,23 +117,47 @@ def grassland(layout, variants):
     grass = Model()
     rng = random.Random(528813)
     vertices = grass.parts["grass"]
-    for index in range(7600):
-        tall = index < 440
-        z = rng.uniform(-15.,79.) if tall else rng.uniform(-34.,257.)
+    for index in range(7760):
+        tall = index < 600
+        verge = index < 270
+        z = rng.uniform(2.,62.) if verge else (rng.uniform(-15.,79.) if tall else rng.uniform(-34.,257.))
         center,_ = road_at(layout["road"],z)
         spread = 10. if tall else (37. if index<5400 else 118.)
-        x = center+rng.choice((-1,1))*rng.uniform(3.1,spread)
+        x = center+rng.choice((-1,1))*rng.uniform(3.1,4.9 if verge else spread)
         clump = math.sin(x*.27+z*.14)*math.sin(z*.17-x*.11)
         if clump<-.28 and rng.random()<.67:
             continue
         angle = rng.uniform(0.,math.tau)
         sin,cos = math.sin(angle),math.cos(angle)
-        size = rng.uniform(.82,1.58) if tall else rng.uniform(2.,3.8)
+        size = rng.uniform(1.05,2.22) if tall else rng.uniform(2.,3.8)
         y = height(layout,x,z)-.018
         variant = rng.choice(variants[:3] if tall else variants[3:])
         vertices.extend((x+size*(vx*cos+vz*sin),y+size*vy,z+size*(vz*cos-vx*sin),
                          nx*cos+nz*sin,ny,nz*cos-nx*sin,u,v) for vx,vy,vz,nx,ny,nz,u,v in variant)
     return grass
+
+
+def outcrops(model, layout):
+    for index,(x,z,width,h,depth) in enumerate(layout["outcrops"]):
+        y = height(layout,x,z)-.48*h
+        rings = []
+        for layer,(elevation,spread) in enumerate(((0.,.94),(.47,1.),(1.12,.57),(1.45,.22))):
+            ring = []
+            for vertex in range(10):
+                theta = vertex*math.tau/10+index*.54
+                erosion = .84+.15*math.cos(theta*3.+index)+.12*math.sin(theta*5.+layer)
+                ring.append((x+math.cos(theta)*width*spread*erosion+layer*width*.065,
+                             y+h*(elevation+.13*math.sin(theta*2.+layer*.7)),
+                             z+math.sin(theta)*depth*spread*erosion-layer*depth*.075))
+            rings.append(ring)
+        for bottom,top in zip(rings,rings[1:]):
+            for vertex in range(10):
+                nxt = (vertex+1)%10
+                points = [bottom[vertex],top[vertex],top[nxt],bottom[nxt]]
+                model.face("stone",points,[(a*.43+c*.21,b*.46+c*.51) for a,b,c in points])
+        cap = [(x+width*.195,y+h*1.52,z-depth*.225)]
+        for vertex in range(10):
+            model.face("stone",cap+[rings[-1][(vertex+1)%10],rings[-1][vertex]])
 
 
 def forest(layout):
@@ -191,5 +215,6 @@ def build_landscape(output, layout):
     for filename in ("grass_medium_01.bin","grass_medium_01_1k.gltf"):
         (source/filename).unlink()
     wood,leaves = forest(layout)
+    outcrops(wood,layout)
     for name,model in (("inland_grasses",grass),("inland_trees",wood),("inland_canopy",leaves)):
         model.write(output,name,TREE_COLORS,TREE_MAPS)

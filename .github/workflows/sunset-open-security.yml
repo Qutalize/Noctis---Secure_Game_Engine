@@ -75,6 +75,17 @@ jobs:
           python -B tools/sunset/build_pv.py pv-frames sunset-evidence
       - uses: actions/upload-artifact@v7
         with:
+          name: coastal-preview
+          path: |
+            sunset-evidence/wide-after-msaa.png
+            sunset-evidence/villa-after-msaa.png
+            sunset-evidence/dining-after-msaa.png
+            sunset-evidence/pv-results.json
+            sunset-evidence/Sunset-Resort-PV.mp4
+          if-no-files-found: error
+          retention-days: 5
+      - uses: actions/upload-artifact@v7
+        with:
           name: sunset-evidence
           path: |
             sunset-evidence/*.png
@@ -118,9 +129,14 @@ jobs:
           python -B tools/sunset/build_desert_pv.py desert-frames desert-evidence
       - uses: actions/upload-artifact@v7
         with:
+          name: desert-preview
+          path: desert-evidence/**
+          if-no-files-found: error
+          retention-days: 5
+      - uses: actions/upload-artifact@v7
+        with:
           name: desert-road
           path: |
-            desert-evidence/**
             desert-ci/Release/DesertRoad.exe
             desert-ci/Release/desert-assets/**
             desert-ci/Release/shaders/*.dxil
@@ -154,9 +170,14 @@ jobs:
           python -B tools/sunset/build_desert_pv.py inland-frames inland-evidence --inland
       - uses: actions/upload-artifact@v7
         with:
+          name: inland-preview
+          path: inland-evidence/**
+          if-no-files-found: error
+          retention-days: 5
+      - uses: actions/upload-artifact@v7
+        with:
           name: inland-tour
           path: |
-            inland-evidence/**
             inland-ci/Release/InlandTour.exe
             inland-ci/Release/inland-assets/**
             inland-ci/Release/shaders/*.dxil

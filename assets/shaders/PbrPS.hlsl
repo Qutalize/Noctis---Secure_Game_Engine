@@ -252,8 +252,10 @@ float4 PSMain(PSInput input) : SV_Target
         const float detail = CoastalNoise(input.worldPos.xz * .13f);
         albedo.rgb *= lerp(.70f, 1.28f, broad * .78f + detail * .22f);
         if (meadow) {
-            const float3 seasonalGreen = lerp(float3(.019f,.040f,.009f),float3(.013f,.061f,.011f),broad);
-            albedo.rgb = albedo.rgb * float3(.72f,1.12f,.62f) + seasonalGreen * lerp(.54f,1.13f,detail);
+            const float terraces = CoastalNoise(input.worldPos.xz * float2(.038f,.062f) + 2.1f);
+            const float growth = smoothstep(.30f,.74f,.58f*broad+.42f*terraces);
+            const float3 meadowColor = lerp(float3(.022f,.039f,.008f),float3(.010f,.079f,.014f),growth);
+            albedo.rgb = albedo.rgb * float3(.72f,1.12f,.62f) + meadowColor * lerp(.51f,1.27f,detail);
         }
         wet = gScenicWeather.x * smoothstep(.24f, .79f, detail);
         albedo.rgb *= 1.f - .22f * wet;

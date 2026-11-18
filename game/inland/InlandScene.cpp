@@ -30,8 +30,10 @@ Shot ComposeShot(const desert::Route& route, float time) {
     const float phase = std::fmod(std::clamp(time, 0.f, 11.999f), 4.f) * .25f;
     const float travel = phase * phase * (3.f - 2.f * phase);
     if (time < 4.f) {
-        const auto eye = route.Point(-11.f + 40.f * travel, -11.f + 13.f * travel, 7.2f - 4.3f * travel);
-        return {LookAt(eye, route.Point(75.f + 32.f * travel, -15.f + 7.f * travel, -1.3f)), 54.f, .14f, 0.f};
+        const float descent = std::clamp(phase * 1.85f, 0.f, 1.f);
+        const auto eye = route.Point(-11.f + 50.f * travel, -5.1f + 9.2f * travel,
+                                     std::lerp(10.f, 1.42f, descent * descent * (3.f - 2.f * descent)));
+        return {LookAt(eye, route.Point(75.f + 32.f * travel, -10.f + 6.f * travel, .23f)), 54.f, .14f, 0.f};
     }
     if (time < 8.f) {
         const auto eye = route.Point(374.f + 18.f * travel, -1.35f + 2.8f * travel, 1.72f + .46f * travel);
